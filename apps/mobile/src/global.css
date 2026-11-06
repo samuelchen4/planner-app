@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme colors are not defined here: they come from packages/ui/tokens.js and are applied
+   as CSS variables in src/app/_layout.tsx, so mobile and web share one source of truth. */
