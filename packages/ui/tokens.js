@@ -11,6 +11,7 @@ const palette = {
     subtle: '#A1A1AA', // tertiary text, placeholder
     border: '#E5E5EA', // hairlines, dashed outlines
     accent: '#7C5CFA', // brand / selection
+    'on-accent': '#FFFFFF', // text/icons on an accent fill
     success: '#34C759',
     warning: '#FF9500',
     danger: '#FF3B30',
@@ -23,6 +24,7 @@ const palette = {
     subtle: '#636366',
     border: '#2C2C2E',
     accent: '#9D85FF',
+    'on-accent': '#FFFFFF',
     success: '#30D158',
     warning: '#FF9F0A',
     danger: '#FF453A',
@@ -41,6 +43,7 @@ const typeScale = {
   subhead: ['15px', '20px'],
   footnote: ['13px', '18px'],
   caption: ['12px', '16px'],
+  caption2: ['11px', '13px'],
 };
 
 /** '#7C5CFA' -> '124 92 250' (the channel format Tailwind's <alpha-value> needs) */

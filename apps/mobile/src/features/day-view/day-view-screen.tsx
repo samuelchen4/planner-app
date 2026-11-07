@@ -1,69 +1,45 @@
-import type { DayEntry } from '@planner/core';
-import { Card } from '@planner/ui';
-import { SymbolView } from 'expo-symbols';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { View } from 'react-native';
 
-import { useColors } from '@/lib/theme';
-
+import { DateHeader } from './date-header';
+import { DayCanvas, type DayCanvasHandle } from './day-canvas';
+import { moveItem } from './day-entries';
+import { buildDayRange } from './day-range';
 import { mockDayEntries } from './mock-data';
 
-// Placeholder day view: proves tokens, NativeWind, SF Symbols and shared types work end to end.
-// The real timeline gets designed and built in the next step.
+/**
+ * The day view: a sticky date header floating over an infinite canvas of days.
+ * The two stay in sync: scrolling the canvas into a day selects it in the header, and picking a
+ * date in the header jumps the canvas there.
+ */
 export function DayViewScreen() {
-  const colors = useColors();
-  const dateLabel = new Date().toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  const range = useMemo(() => buildDayRange(), []);
+  const [selected, setSelected] = useState(range.todayKey);
+  const [entries, setEntries] = useState(mockDayEntries);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const canvasRef = useRef<DayCanvasHandle>(null);
+
+  const pickDay = (key: string) => {
+    setSelected(key);
+    canvasRef.current?.scrollToDay(key);
+  };
 
   return (
-    <ScrollView
-      className="flex-1 bg-app"
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerClassName="gap-4 px-4 pb-8 pt-4">
-      <View>
-        <Text className="text-subhead font-medium uppercase text-muted">{dateLabel}</Text>
-        <Text className="text-large-title font-bold text-ink">Today</Text>
-      </View>
-
-      <Card>
-        <View className="mb-1 flex-row items-center gap-1.5">
-          <SymbolView name="calendar" size={14} tintColor={colors.muted} />
-          <Text className="text-subhead font-medium text-muted">Schedule</Text>
-        </View>
-        {mockDayEntries.map((entry, i) => (
-          <EntryRow key={entryId(entry)} entry={entry} isFirst={i === 0} />
-        ))}
-      </Card>
-    </ScrollView>
-  );
-}
-
-function EntryRow({ entry, isFirst }: { entry: DayEntry; isFirst: boolean }) {
-  const colors = useColors();
-  const title = entry.kind === 'item' ? entry.item.title : entry.event.title;
-  const start = entry.kind === 'item' ? entry.item.startAt : entry.event.startAt;
-  const source = entry.kind === 'external' ? 'Google' : entry.item.type.replace('_', ' ');
-
-  return (
-    <View
-      className="flex-row items-center justify-between py-3"
-      style={isFirst ? undefined : [styles.divider, { borderTopColor: colors.border }]}>
-      <View>
-        <Text className="text-headline font-semibold text-ink">{title}</Text>
-        <Text className="text-footnote capitalize text-muted">{source}</Text>
-      </View>
-      <Text className="text-subhead text-muted" style={styles.tabular}>
-        {start ? start.slice(11, 16) : 'Anytime'}
-      </Text>
+    <View className="bg-app flex-1">
+      <DayCanvas
+        ref={canvasRef}
+        range={range}
+        entries={entries}
+        headerHeight={headerHeight}
+        onVisibleDayChange={setSelected}
+        onMoveItem={(id, startMin) => setEntries((prev) => moveItem(prev, id, startMin))}
+      />
+      <DateHeader
+        range={range}
+        selected={selected}
+        onSelect={pickDay}
+        onHeightChange={setHeaderHeight}
+      />
     </View>
   );
 }
-
-const entryId = (e: DayEntry) => (e.kind === 'item' ? e.item.id : e.event.id);
-
-const styles = StyleSheet.create({
-  divider: { borderTopWidth: StyleSheet.hairlineWidth },
-  tabular: { fontVariant: ['tabular-nums'] },
-});

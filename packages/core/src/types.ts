@@ -51,5 +51,4 @@ export interface ExternalEvent {
 
 /** What the day view renders: either kind, tagged. */
 export type DayEntry =
-  | { kind: 'item'; item: PlannerItem }
-  | { kind: 'external'; event: ExternalEvent };
+  { kind: 'item'; item: PlannerItem } | { kind: 'external'; event: ExternalEvent };

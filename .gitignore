@@ -1,5 +1,34 @@
+# Dependencies & build caches
 node_modules/
 .turbo/
-.DS_Store
 *.tsbuildinfo
-.env*.local
+dist/
+web-build/
+coverage/
+.expo/
+
+# Logs
+*.log
+
+# OS / editors
+.DS_Store
+.idea/
+
+# Env files (keep an .env.example if we ever need one)
+.env
+.env.*
+!.env.example
+
+# Signing keys & store credentials (Apple .p8/.p12, Android keystores, EAS local credentials)
+*.p8
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+*.mobileprovision
+credentials.json
+
+# Personal AI-assistant notes and settings (local only)
+CLAUDE.md
+.claude/settings.local.json
