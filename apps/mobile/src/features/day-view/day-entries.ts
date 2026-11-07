@@ -19,6 +19,7 @@ import { MIN_BLOCK_MIN, type TimeWindow, type TimelineEntry } from './timeline-c
 export interface AnytimeTask {
   id: string;
   title: string;
+  done: boolean;
 }
 
 /**
@@ -34,7 +35,7 @@ export function bucketEntries(entries: DayEntry[]) {
     const { id, title, startAt, endAt, status } = isItem ? e.item : e.event;
     if (status === 'cancelled') continue;
     if (!startAt) {
-      if (isItem) anytime.push({ id, title });
+      if (isItem) anytime.push({ id, title, done: status === 'done' });
       continue;
     }
     const startMin = minutesOfDay(startAt);
@@ -49,6 +50,8 @@ export function bucketEntries(entries: DayEntry[]) {
       endMin: endMin > startMin ? endMin : MINUTES_PER_DAY,
       draggable: isItem,
       tone: isItem ? 'planner' : 'calendar',
+      checkable: isItem,
+      done: status === 'done',
     });
     timedByDay.set(day, list);
   }
@@ -157,6 +160,24 @@ export function moveItem(entries: DayEntry[], id: string, startMin: number): Day
         startAt: isoAtMinutes(startAt, startMin),
         endAt: isoAtMinutes(startAt, startMin + duration),
         updatedAt: toLocalIso(new Date()),
+      },
+    };
+  });
+}
+
+/** Check a planner item off, or un-check it. */
+export function toggleItemDone(entries: DayEntry[], id: string): DayEntry[] {
+  return entries.map((e) => {
+    if (e.kind !== 'item' || e.item.id !== id) return e;
+    const now = toLocalIso(new Date());
+    const done = e.item.status !== 'done';
+    return {
+      ...e,
+      item: {
+        ...e.item,
+        status: done ? 'done' : 'open',
+        completedAt: done ? now : undefined,
+        updatedAt: now,
       },
     };
   });

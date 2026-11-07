@@ -9,6 +9,8 @@ export const haptics = {
   lift: () => enabled && void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
   /** Crossing a detent, e.g. snapping to the next time slot. */
   tick: () => enabled && void Haptics.selectionAsync(),
+  /** Checking an item off. */
+  check: () => enabled && void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
   /** Hitting a hard limit (e.g. the 12:01 AM / 11:59 PM bound). */
   limit: () => enabled && void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
 };

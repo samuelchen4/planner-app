@@ -28,4 +28,7 @@ export interface TimelineEntry {
   /** Only our own planner items move; Google events are a read-only mirror. */
   draggable: boolean;
   tone: 'planner' | 'calendar';
+  /** Planner items can be checked off; calendar events can't (they have no checkbox). */
+  checkable: boolean;
+  done: boolean;
 }

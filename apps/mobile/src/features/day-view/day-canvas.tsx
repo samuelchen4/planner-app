@@ -1,8 +1,7 @@
 import type { DayEntry } from '@planner/core';
-import { Card } from '@planner/ui';
-import { SymbolView } from 'expo-symbols';
+import { Card, cn } from '@planner/ui';
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
-import { Platform, Text, View, type FlatList as RNFlatList } from 'react-native';
+import { Platform, Pressable, Text, View, type FlatList as RNFlatList } from 'react-native';
 import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedRef,
@@ -14,10 +13,11 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
+import { haptics } from '@/lib/haptics';
 import { useSettings } from '@/lib/settings';
-import { useColors } from '@/lib/theme';
 
 import { CanvasScrollContext } from './canvas-scroll';
+import { Checkbox } from './checkbox';
 import { PAGE_PAD_X } from './date-header';
 import {
   applyStretch,
@@ -69,6 +69,7 @@ interface Props {
   /** A block or grid edge started/stopped being dragged. */
   onDraggingChange?: (dragging: boolean) => void;
   onMoveItem: (id: string, startMin: number) => void;
+  onToggleDone: (id: string) => void;
 }
 
 /**
@@ -84,6 +85,7 @@ export function DayCanvas({
   onVisibleDayChange,
   onDraggingChange,
   onMoveItem,
+  onToggleDone,
 }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarSpace = useTabBarSpace();
@@ -270,6 +272,7 @@ export function DayCanvas({
             window={windows[index]}
             anytime={index === range.todayIndex ? anytime : NO_TASKS}
             onMove={onMoveItem}
+            onToggleDone={onToggleDone}
             onDragChange={setDragging}
             onEdgeCommit={(edge, minutes) => commitEdge(index, edge, minutes)}
           />
@@ -287,6 +290,7 @@ interface DaySectionProps {
   window: TimeWindow | null;
   anytime: AnytimeTask[];
   onMove: (id: string, startMin: number) => void;
+  onToggleDone: (id: string) => void;
   onDragChange: (dragging: boolean) => void;
   onEdgeCommit: (edge: Edge, minutes: number) => void;
 }
@@ -299,10 +303,10 @@ function DaySection({
   window,
   anytime,
   onMove,
+  onToggleDone,
   onDragChange,
   onEdgeCommit,
 }: DaySectionProps) {
-  const colors = useColors();
   const label = date.toLocaleDateString(undefined, {
     weekday: 'long',
     month: 'long',
@@ -326,16 +330,28 @@ function DaySection({
           </Text>
           <View style={{ gap: ANYTIME_ROW_GAP }}>
             {anytime.map((a) => (
-              <View
+              <Pressable
                 key={a.id}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: a.done }}
+                onPress={() => {
+                  haptics.check();
+                  onToggleDone(a.id);
+                }}
                 style={{ height: ANYTIME_ROW_H }}
                 className="bg-card flex-row items-center gap-3 rounded-2xl px-4 shadow-sm shadow-black/5"
               >
-                <SymbolView name="circle" size={20} tintColor={colors.subtle} />
-                <Text numberOfLines={1} className="text-body text-ink flex-1">
+                <Checkbox done={a.done} />
+                <Text
+                  numberOfLines={1}
+                  className={cn(
+                    'text-body flex-1',
+                    a.done ? 'text-muted line-through' : 'text-ink',
+                  )}
+                >
                   {a.title}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         </View>
@@ -347,6 +363,7 @@ function DaySection({
           entries={entries}
           isToday={isToday}
           onMove={onMove}
+          onToggleDone={onToggleDone}
           onDragChange={onDragChange}
           onEdgeCommit={onEdgeCommit}
         />

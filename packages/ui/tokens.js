@@ -12,6 +12,7 @@ const palette = {
     border: '#E5E5EA', // hairlines, dashed outlines
     accent: '#7C5CFA', // brand / selection
     'on-accent': '#FFFFFF', // text/icons on an accent fill
+    done: '#34C759', // checked-off planner items (reserved: no category may use it)
     success: '#34C759',
     warning: '#FF9500',
     danger: '#FF3B30',
@@ -25,6 +26,7 @@ const palette = {
     border: '#2C2C2E',
     accent: '#9D85FF',
     'on-accent': '#FFFFFF',
+    done: '#30D158',
     success: '#30D158',
     warning: '#FF9F0A',
     danger: '#FF453A',

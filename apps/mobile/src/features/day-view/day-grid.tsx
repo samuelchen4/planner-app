@@ -31,6 +31,7 @@ interface Props {
   entries: TimelineEntry[];
   isToday: boolean;
   onMove: (id: string, startMin: number) => void;
+  onToggleDone: (id: string) => void;
   onDragChange: (dragging: boolean) => void;
   /** An edge was dragged and released: set it to `minutes`. */
   onEdgeCommit: (edge: Edge, minutes: number) => void;
@@ -51,7 +52,15 @@ interface Props {
  * On release the edge springs to the nearest hour, then the new edge and a zero delta are applied
  * together (one UI-thread step, no visible change) and React is told afterwards.
  */
-export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdgeCommit }: Props) {
+export function DayGrid({
+  window,
+  entries,
+  isToday,
+  onMove,
+  onToggleDone,
+  onDragChange,
+  onEdgeCommit,
+}: Props) {
   const { listRef, scrollY } = useCanvasScroll();
   const bounds = useMemo(() => contentBounds(entries), [entries]);
   const [activeEdge, setActiveEdge] = useState<Edge | null>(null);
@@ -149,6 +158,7 @@ export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdge
             entries={entries}
             window={window}
             onMove={onMove}
+            onToggleDone={onToggleDone}
             onDragChange={onDragChange}
             showNow={isToday}
           />

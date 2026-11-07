@@ -25,6 +25,8 @@ export interface PlannerItem {
   /** RFC 5545 recurrence rule, e.g. 'FREQ=WEEKLY;BYDAY=MO,WE' */
   rrule?: string;
   status: 'open' | 'done' | 'cancelled';
+  /** When it was checked off (set together with status 'done'). */
+  completedAt?: IsoDateTime;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }

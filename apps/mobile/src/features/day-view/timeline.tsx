@@ -22,6 +22,7 @@ interface Props {
   /** The visible slice of the day; only used to keep block drags inside it. */
   window: TimeWindow;
   onMove: (id: string, startMin: number) => void;
+  onToggleDone: (id: string) => void;
   onDragChange: (dragging: boolean) => void;
   /** Draw the current-time line (only when the grid shows today). */
   showNow?: boolean;
@@ -35,7 +36,14 @@ const HOURS = Array.from({ length: 23 }, (_, i) => i + 1);
  * time-of-day positions (minute 0 at the top, MINUTES_PER_DAY tall). The parent shows a slice of
  * it by clipping and offsetting, so changing the visible window never moves anything in here.
  */
-export function Timeline({ entries, window, onMove, onDragChange, showNow = true }: Props) {
+export function Timeline({
+  entries,
+  window,
+  onMove,
+  onToggleDone,
+  onDragChange,
+  showNow = true,
+}: Props) {
   const colors = useColors();
   const nowMin = useNowMinutes();
   const placed = useMemo(() => layoutColumns(entries, MIN_BLOCK_MIN), [entries]);
@@ -55,6 +63,7 @@ export function Timeline({ entries, window, onMove, onDragChange, showNow = true
             columns={columns}
             window={window}
             onMove={onMove}
+            onToggleDone={onToggleDone}
             onDragChange={onDragChange}
           />
         ))}

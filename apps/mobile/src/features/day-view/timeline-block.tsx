@@ -1,7 +1,12 @@
 import { cn } from '@planner/ui';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import {
+  GestureDetector,
+  useCompetingGestures,
+  usePanGesture,
+  useTapGesture,
+} from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -12,6 +17,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { haptics } from '@/lib/haptics';
 
+import { Checkbox } from './checkbox';
 import { formatTime } from './time';
 import {
   MIN_BLOCK_MIN,
@@ -23,6 +29,7 @@ import {
 
 const SPRING = { damping: 22, stiffness: 320, mass: 0.6 };
 const LONG_PRESS_MS = 300;
+const CHECK_SIZE = 16;
 
 interface Props {
   entry: TimelineEntry;
@@ -31,6 +38,7 @@ interface Props {
   /** The grid's visible window: drags stay inside it. */
   window: TimeWindow;
   onMove: (id: string, startMin: number) => void;
+  onToggleDone: (id: string) => void;
   onDragChange: (dragging: boolean) => void;
 }
 
@@ -39,7 +47,15 @@ interface Props {
  * Positioned by absolute time of day (minute 0 = top of the day), so changing the grid's visible
  * window never moves it; only moving the item itself does.
  */
-export function TimelineBlock({ entry, column, columns, window, onMove, onDragChange }: Props) {
+export function TimelineBlock({
+  entry,
+  column,
+  columns,
+  window,
+  onMove,
+  onToggleDone,
+  onDragChange,
+}: Props) {
   const duration = entry.endMin - entry.startMin;
   const height = Math.max(duration, MIN_BLOCK_MIN) * PX_PER_MIN;
   const minStart = window.startMin;
@@ -107,6 +123,37 @@ export function TimelineBlock({ entry, column, columns, window, onMove, onDragCh
     },
   });
 
+  // A quick tap on the check toggles done. A long press still drags (the pan takes over
+  // at 300ms, which cancels the tap), so the whole block stays grabbable.
+  const handleToggle = () => {
+    haptics.check();
+    onToggleDone(entry.id);
+  };
+  const tap = useTapGesture({
+    enabled: entry.checkable,
+    maxDuration: 250,
+    // The check is drawn small; the touch area reaches ~44pt.
+    hitSlop: { top: 13, bottom: 13, left: 4, right: 8 },
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(handleToggle);
+    },
+  });
+
+  // Double-tap anywhere on the block toggles done too (a bigger target than the check). It competes
+  // with the long-press drag: whichever recognizes first wins, and a quick double tap never lasts
+  // long enough to start a drag.
+  const doubleTap = useTapGesture({
+    enabled: entry.checkable,
+    numberOfTaps: 2,
+    maxDelay: 300,
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(handleToggle);
+    },
+  });
+  const blockGesture = useCompetingGestures(pan, doubleTap);
+
   const animatedStyle = useAnimatedStyle(() => ({
     top: top.get(),
     zIndex: active.get() ? 10 : 1,
@@ -118,9 +165,10 @@ export function TimelineBlock({ entry, column, columns, window, onMove, onDragCh
   const timeLabel = `${formatTime(startMin)} – ${formatTime(startMin + duration)}`;
   const compact = height < 40;
   const planner = entry.tone === 'planner';
+  const done = entry.done;
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={blockGesture}>
       <Animated.View
         style={[
           styles.block,
@@ -131,20 +179,41 @@ export function TimelineBlock({ entry, column, columns, window, onMove, onDragCh
         <View
           className={cn(
             'flex-1 flex-row overflow-hidden rounded-lg',
-            planner ? 'bg-accent/15' : 'bg-subtle/20',
+            !planner ? 'bg-subtle/20' : done ? 'bg-done/15' : 'bg-accent/15',
           )}
         >
-          <View className={cn('w-1', planner ? 'bg-accent' : 'bg-subtle')} />
-          <View className={cn('flex-1 px-2', compact ? 'justify-center' : 'py-1')}>
-            <Text numberOfLines={compact ? 1 : 2} className="text-footnote text-ink font-semibold">
-              {entry.title}
+          <View className={cn('w-1', !planner ? 'bg-subtle' : done ? 'bg-done' : 'bg-accent')} />
+          <View className={cn('flex-1 pl-2 pr-1.5', compact ? 'justify-center' : 'py-1')}>
+            {/* Title row: the title takes what's left and truncates; the check sits at its right,
+                no taller than the title line. Compact blocks fit the start time in here too. */}
+            <View className="flex-row items-center" style={styles.titleRow}>
+              <Text
+                numberOfLines={1}
+                className={cn(
+                  'text-footnote shrink font-semibold',
+                  done ? 'text-muted line-through' : 'text-ink',
+                )}
+              >
+                {entry.title}
+              </Text>
               {compact && (
-                <Text className="text-muted font-normal" style={styles.tabular}>
-                  {'  '}
+                <Text
+                  numberOfLines={1}
+                  className="text-footnote text-muted ml-1.5"
+                  style={styles.tabular}
+                >
                   {formatTime(startMin)}
                 </Text>
               )}
-            </Text>
+              <View className="flex-1" />
+              {entry.checkable && (
+                <GestureDetector gesture={tap}>
+                  <View className="items-end justify-center pl-2" style={styles.checkTarget}>
+                    <Checkbox done={done} size={CHECK_SIZE} />
+                  </View>
+                </GestureDetector>
+              )}
+            </View>
             {!compact && (
               <Text numberOfLines={1} className="text-caption text-muted" style={styles.tabular}>
                 {timeLabel}
@@ -167,4 +236,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
   },
   tabular: { fontVariant: ['tabular-nums'] },
+  // Matches text-footnote's line height, so the check never makes the row taller than the title.
+  titleRow: { height: 18 },
+  checkTarget: { height: 18 },
 });

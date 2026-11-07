@@ -4,7 +4,7 @@ import { View } from 'react-native';
 
 import { DateHeader } from './date-header';
 import { DayCanvas, type DayCanvasHandle } from './day-canvas';
-import { moveItem } from './day-entries';
+import { moveItem, toggleItemDone } from './day-entries';
 import { buildDayRange } from './day-range';
 import { mockDayEntries } from './mock-data';
 
@@ -43,6 +43,7 @@ export function DayViewScreen() {
         onVisibleDayChange={setSelected}
         onDraggingChange={setDragging}
         onMoveItem={(id, startMin) => setEntries((prev) => moveItem(prev, id, startMin))}
+        onToggleDone={(id) => setEntries((prev) => toggleItemDone(prev, id))}
       />
       <DateHeader
         range={range}

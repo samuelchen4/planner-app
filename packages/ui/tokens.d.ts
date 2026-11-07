@@ -8,6 +8,7 @@ export type ColorToken =
   | 'border'
   | 'accent'
   | 'on-accent'
+  | 'done'
   | 'success'
   | 'warning'
   | 'danger';
