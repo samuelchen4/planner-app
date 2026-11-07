@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useNavigation } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { DateHeader } from './date-header';
@@ -19,6 +20,14 @@ export function DayViewScreen() {
   const [headerHeight, setHeaderHeight] = useState(0);
   const canvasRef = useRef<DayCanvasHandle>(null);
 
+  // While a block or grid edge is being dragged, swiping between tabs is paused so a sideways
+  // wobble in the drag can't start turning the page.
+  const navigation = useNavigation();
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    navigation.setOptions({ swipeEnabled: !dragging });
+  }, [navigation, dragging]);
+
   const pickDay = (key: string) => {
     setSelected(key);
     canvasRef.current?.scrollToDay(key);
@@ -32,6 +41,7 @@ export function DayViewScreen() {
         entries={entries}
         headerHeight={headerHeight}
         onVisibleDayChange={setSelected}
+        onDraggingChange={setDragging}
         onMoveItem={(id, startMin) => setEntries((prev) => moveItem(prev, id, startMin))}
       />
       <DateHeader

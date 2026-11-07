@@ -12,6 +12,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
+import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
 import { useSettings } from '@/lib/settings';
 import { useColors } from '@/lib/theme';
 
@@ -64,6 +66,8 @@ interface Props {
   headerHeight: number;
   /** The day at the top of the visible area changed (by scrolling). */
   onVisibleDayChange: (key: string) => void;
+  /** A block or grid edge started/stopped being dragged. */
+  onDraggingChange?: (dragging: boolean) => void;
   onMoveItem: (id: string, startMin: number) => void;
 }
 
@@ -78,14 +82,18 @@ export function DayCanvas({
   entries,
   headerHeight,
   onVisibleDayChange,
+  onDraggingChange,
   onMoveItem,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const tabBarSpace = useTabBarSpace();
+  const tabBar = useTabBarScrollTracker();
   // Animated ref + UI-thread scroll offset, so grids can scroll the list in lockstep with a drag.
   const listRef = useAnimatedRef<RNFlatList<Date>>();
   const scrollY = useSharedValue(0);
   const canvasScroll = useMemo(() => ({ listRef, scrollY }), [listRef, scrollY]);
   const [dragging, setDragging] = useState(false);
+  useEffect(() => onDraggingChange?.(dragging), [dragging, onDraggingChange]);
   const [viewportHeight, setViewportHeight] = useState(0);
   const { schedule } = useSettings();
   const { timedByDay, anytime } = useMemo(() => bucketEntries(entries), [entries]);
@@ -216,8 +224,14 @@ export function DayCanvas({
   const onScroll = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.set(e.contentOffset.y);
+      tabBar.onScroll(e.contentOffset.y);
       scheduleOnRN(handleScroll, e.contentOffset.y);
     },
+    // Only the user's own scrolling (drag + fling) shrinks/restores the tab bar.
+    onBeginDrag: (e) => tabBar.onBegin(e.contentOffset.y),
+    onEndDrag: () => tabBar.onEnd(),
+    onMomentumBegin: (e) => tabBar.onBegin(e.contentOffset.y),
+    onMomentumEnd: () => tabBar.onEnd(),
   });
 
   return (
@@ -244,7 +258,7 @@ export function DayCanvas({
         scrollIndicatorInsets={{ top: spacer }}
         contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X }}
         ListHeaderComponent={<View style={{ height: spacer }} />}
-        ListFooterComponent={<View style={{ height: FOOTER_H }} />}
+        ListFooterComponent={<View style={{ height: FOOTER_H + tabBarSpace }} />}
         onLayout={(e) => setViewportHeight(e.nativeEvent.layout.height)}
         onScroll={onScroll}
         scrollEventThrottle={16}
