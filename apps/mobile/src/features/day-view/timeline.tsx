@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useColors } from '@/lib/theme';
 
 import { layoutColumns } from './layout';
-import { formatHour, minutesOfDay } from './time';
+import { formatHour, MINUTES_PER_DAY, minutesOfDay } from './time';
 import {
-  GRID_PAD_Y,
   GUTTER_WIDTH,
   MIN_BLOCK_MIN,
   PX_PER_MIN,
@@ -20,41 +19,31 @@ const NOW_DOT = 10;
 
 interface Props {
   entries: TimelineEntry[];
-  /** The slice of the day to draw; blocks and the now line are positioned relative to its start. */
+  /** The visible slice of the day; only used to keep block drags inside it. */
   window: TimeWindow;
   onMove: (id: string, startMin: number) => void;
   onDragChange: (dragging: boolean) => void;
-  onLayout?: (e: LayoutChangeEvent) => void;
   /** Draw the current-time line (only when the grid shows today). */
   showNow?: boolean;
 }
 
-/** A day's grid for one time window: hour lines, a line at the current time, and the day's blocks. */
-export function Timeline({
-  entries,
-  window,
-  onMove,
-  onDragChange,
-  onLayout,
-  showNow = true,
-}: Props) {
+// Every hour line of the day (midnight sits above the earliest possible window, 12:01 AM).
+const HOURS = Array.from({ length: 23 }, (_, i) => i + 1);
+
+/**
+ * A whole day's grid: hour lines, the day's blocks and the current-time line, all at absolute
+ * time-of-day positions (minute 0 at the top, MINUTES_PER_DAY tall). The parent shows a slice of
+ * it by clipping and offsetting, so changing the visible window never moves anything in here.
+ */
+export function Timeline({ entries, window, onMove, onDragChange, showNow = true }: Props) {
   const colors = useColors();
   const nowMin = useNowMinutes();
   const placed = useMemo(() => layoutColumns(entries, MIN_BLOCK_MIN), [entries]);
-  const y = (minutes: number) => (minutes - window.startMin) * PX_PER_MIN;
-
-  // Whole hours inside the window, e.g. 7…22 for 7:00 AM – 10:00 PM.
-  const hours: number[] = [];
-  for (let h = Math.ceil(window.startMin / 60); h * 60 <= window.endMin; h++) hours.push(h);
-  const nowVisible = showNow && nowMin >= window.startMin && nowMin <= window.endMin;
 
   return (
-    <View
-      style={[styles.container, { height: (window.endMin - window.startMin) * PX_PER_MIN }]}
-      onLayout={onLayout}
-    >
-      {hours.map((hour) => (
-        <HourRow key={hour} hour={hour} y={y(hour * 60)} />
+    <View style={styles.day}>
+      {HOURS.map((hour) => (
+        <HourRow key={hour} hour={hour} y={hour * 60 * PX_PER_MIN} />
       ))}
 
       <View style={styles.lane}>
@@ -71,8 +60,11 @@ export function Timeline({
         ))}
       </View>
 
-      {nowVisible && (
-        <View pointerEvents="none" style={[styles.nowRow, { top: y(nowMin) - NOW_DOT / 2 }]}>
+      {showNow && (
+        <View
+          pointerEvents="none"
+          style={[styles.nowRow, { top: nowMin * PX_PER_MIN - NOW_DOT / 2 }]}
+        >
           <View style={[styles.nowDot, { backgroundColor: colors.danger }]} />
           <View style={[styles.nowLine, { backgroundColor: colors.danger }]} />
         </View>
@@ -82,7 +74,7 @@ export function Timeline({
 }
 
 /** One hour line with its label, centred on `y` (absolutely positioned in its parent). */
-export function HourRow({ hour, y }: { hour: number; y: number }) {
+function HourRow({ hour, y }: { hour: number; y: number }) {
   const colors = useColors();
   return (
     <View pointerEvents="none" style={[styles.hourRow, { top: y - LABEL_HEIGHT / 2 }]}>
@@ -116,7 +108,7 @@ export function useNowMinutes() {
 }
 
 const styles = StyleSheet.create({
-  container: { marginVertical: GRID_PAD_Y },
+  day: { height: MINUTES_PER_DAY * PX_PER_MIN },
   hourRow: {
     position: 'absolute',
     left: 0,

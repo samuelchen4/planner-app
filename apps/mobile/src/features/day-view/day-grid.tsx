@@ -1,6 +1,6 @@
 import { Card } from '@planner/ui';
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, {
   scrollTo,
   useAnimatedReaction,
@@ -13,8 +13,8 @@ import { haptics } from '@/lib/haptics';
 import { useCanvasScroll } from './canvas-scroll';
 import { contentBounds, edgeRange, type Edge } from './day-entries';
 import { EDGE_HANDLE_H, EdgeHandle, useEdgeDrag } from './edge-handle';
-import { formatEdge, MINUTES_PER_DAY } from './time';
-import { HourRow, Timeline } from './timeline';
+import { formatEdge } from './time';
+import { Timeline } from './timeline';
 import {
   GRID_PAD_Y,
   gridHeight,
@@ -37,22 +37,36 @@ interface Props {
 }
 
 /**
- * A day's grid card with stretchable edges. While an edge is dragged, everything runs on the UI
- * thread: the grid's viewport grows/shrinks by the drag (`delta`), with the grid content shifted
- * down by the top edge's delta so earlier hours appear above it.
- * - Bottom edge: the card simply gets taller/shorter, pushing later days along.
- * - Top edge: the card also grows at its top, and the canvas scrolls by the same amount every
- *   frame, so the grid stays still and everything above it (handle, label, earlier days) is
- *   pushed up — or pulled down when shrinking.
- * On release the edge springs to the nearest hour and the parent commits it as the new window;
- * by then the layout already matches, so nothing jumps.
+ * A day's grid card with stretchable edges.
+ *
+ * The Timeline inside is always the whole day (absolute time-of-day positions); this card just
+ * shows a slice of it: a clipping viewport sized to the window, with the day offset so the
+ * window's start sits at the top. Window edges live in shared values, so the slice can change on
+ * the UI thread without anything inside the day moving.
+ *
+ * While an edge is dragged its `delta` grows/shrinks the slice frame by frame:
+ * - bottom edge: the card gets taller/shorter, pushing later days along;
+ * - top edge: the card grows at its top too, and the canvas scrolls by the same amount every
+ *   frame, so the grid stays still and everything above it moves with the finger.
+ * On release the edge springs to the nearest hour, then the new edge and a zero delta are applied
+ * together (one UI-thread step, no visible change) and React is told afterwards.
  */
 export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdgeCommit }: Props) {
   const { listRef, scrollY } = useCanvasScroll();
   const bounds = useMemo(() => contentBounds(entries), [entries]);
   const [activeEdge, setActiveEdge] = useState<Edge | null>(null);
   const [preview, setPreview] = useState<{ edge: Edge; minutes: number } | null>(null);
-  const baseHeight = useSharedValue(gridHeight(window));
+
+  // The window on the UI thread. Drags write their result here directly; React state follows.
+  const startValue = useSharedValue(window.startMin);
+  const endValue = useSharedValue(window.endMin);
+  const { startMin, endMin } = window;
+  useLayoutEffect(() => {
+    // Only differs when the window changed some other way (data, settings); after a drag it
+    // already matches.
+    if (startValue.get() !== startMin) startValue.set(startMin);
+    if (endValue.get() !== endMin) endValue.set(endMin);
+  }, [startMin, endMin, startValue, endValue]);
 
   const callbacks = (edge: Edge) => ({
     onActiveChange: (on: boolean) => {
@@ -73,13 +87,13 @@ export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdge
 
   const top = useEdgeDrag({
     edge: 'top',
-    edgeMin: window.startMin,
+    edgeValue: startValue,
     range: edgeRange('top', window, bounds),
     ...callbacks('top'),
   });
   const bottom = useEdgeDrag({
     edge: 'bottom',
-    edgeMin: window.endMin,
+    edgeValue: endValue,
     range: edgeRange('bottom', window, bounds),
     ...callbacks('bottom'),
   });
@@ -99,20 +113,16 @@ export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdge
     },
   );
 
-  // Once a new window is committed (and laid out), the drag offsets are folded into it. The layout
-  // then matches what was on screen, so the scroll position needs no correction.
-  const { startMin, endMin } = window;
-  useLayoutEffect(() => {
-    baseHeight.set(gridHeight({ startMin, endMin }));
-    top.delta.set(0);
-    bottom.delta.set(0);
-  }, [startMin, endMin, baseHeight, top.delta, bottom.delta]);
-
   const viewportStyle = useAnimatedStyle(() => ({
-    height: baseHeight.get() + top.delta.get() + bottom.delta.get(),
+    height:
+      GRID_PAD_Y * 2 +
+      (endValue.get() - startValue.get()) * PX_PER_MIN +
+      top.delta.get() +
+      bottom.delta.get(),
   }));
-  const contentStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: top.delta.get() }],
+  // Shift the whole day up so the window's start lands just below the top padding.
+  const dayStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: GRID_PAD_Y - startValue.get() * PX_PER_MIN + top.delta.get() }],
   }));
 
   // Labels: while dragging, where the edge will land; otherwise a hint of the next hour beyond it.
@@ -125,10 +135,6 @@ export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdge
     return endMin < hi ? formatEdge(Math.min(hi, (Math.floor(endMin / 60) + 1) * 60)) : null;
   };
 
-  // Hour lines outside the window, revealed as either edge is pulled outward.
-  const outsideHours: number[] = [];
-  for (let h = 1; h < 24; h++) if (h * 60 < startMin || h * 60 > endMin) outsideHours.push(h);
-
   return (
     <Card className="py-0 pl-1 pr-2">
       <EdgeHandle
@@ -138,15 +144,7 @@ export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdge
         highlighted={activeEdge === 'top'}
       />
       <Animated.View style={[styles.viewport, viewportStyle]}>
-        <Animated.View style={contentStyle}>
-          <View
-            pointerEvents="none"
-            style={[styles.dayRuler, { top: GRID_PAD_Y - startMin * PX_PER_MIN }]}
-          >
-            {outsideHours.map((h) => (
-              <HourRow key={h} hour={h} y={h * 60 * PX_PER_MIN} />
-            ))}
-          </View>
+        <Animated.View style={dayStyle}>
           <Timeline
             entries={entries}
             window={window}
@@ -168,6 +166,4 @@ export function DayGrid({ window, entries, isToday, onMove, onDragChange, onEdge
 
 const styles = StyleSheet.create({
   viewport: { overflow: 'hidden' },
-  // A whole-day coordinate space (minute 0 at its top), positioned so it lines up with the grid.
-  dayRuler: { position: 'absolute', left: 0, right: 0, height: MINUTES_PER_DAY * PX_PER_MIN },
 });

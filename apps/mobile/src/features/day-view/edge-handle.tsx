@@ -1,7 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { StyleSheet, Text, View } from 'react-native';
 import { GestureDetector, usePanGesture, type PanGesture } from 'react-native-gesture-handler';
-import { useSharedValue, withSpring } from 'react-native-reanimated';
+import { useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useColors } from '@/lib/theme';
@@ -16,8 +16,12 @@ const SNAP_SPRING = { damping: 24, stiffness: 260, mass: 0.7 };
 
 interface EdgeDragOptions {
   edge: Edge;
-  /** The edge's committed position (minutes). */
-  edgeMin: number;
+  /**
+   * The edge's committed position (minutes), owned by the UI thread. The drag reads its start
+   * from here and writes the settled value back, in the same frame as it resets `delta`, so the
+   * grid never shows an in-between state.
+   */
+  edgeValue: SharedValue<number>;
   /** Where the edge may go, [min, max] minutes (see edgeRange). */
   range: [number, number];
   onActiveChange: (active: boolean) => void;
@@ -25,18 +29,19 @@ interface EdgeDragOptions {
   onPreview: (minutes: number) => void;
   /** The drag ran into the range limit. */
   onLimit: () => void;
-  /** Released and settled on `minutes`: commit it. */
+  /** Released and settled on `minutes` (already applied to `edgeValue`): store it. */
   onCommit: (minutes: number) => void;
 }
 
 /**
  * Long-press-and-drag on an edge handle. The edge follows the finger smoothly (on the UI thread,
- * via `delta`); on release it springs to the nearest whole hour, then `onCommit` makes it real.
+ * via `delta`); on release it springs to the nearest whole hour, then folds that into `edgeValue`
+ * and zeroes `delta` in one step, and `onCommit` tells React.
  * `delta` is in points, positive = outward (grid grows), negative = inward (grid shrinks).
  */
 export function useEdgeDrag({
   edge,
-  edgeMin,
+  edgeValue,
   range: [lo, hi],
   onActiveChange,
   onPreview,
@@ -49,7 +54,8 @@ export function useEdgeDrag({
   // `delta`, like the canvas scroll, follows it during this time).
   const following = useSharedValue(false);
   const startY = useSharedValue(0);
-  const snapped = useSharedValue(edgeMin);
+  const startEdge = useSharedValue(0);
+  const snapped = useSharedValue(0);
   const clamped = useSharedValue(false);
   const top = edge === 'top';
 
@@ -59,7 +65,8 @@ export function useEdgeDrag({
       'worklet';
       // absoluteY (window coordinates), not translation: the handle itself moves during the drag.
       startY.set(e.absoluteY);
-      snapped.set(edgeMin);
+      startEdge.set(edgeValue.get());
+      snapped.set(edgeValue.get());
       clamped.set(false);
       following.set(true);
       active.set(true);
@@ -67,10 +74,11 @@ export function useEdgeDrag({
     },
     onUpdate: (e) => {
       'worklet';
+      const from = startEdge.get();
       const moved = (e.absoluteY - startY.get()) / PX_PER_MIN; // minutes, + = down
-      const raw = edgeMin + moved;
+      const raw = from + moved;
       const m = Math.min(hi, Math.max(lo, raw));
-      delta.set((top ? edgeMin - m : m - edgeMin) * PX_PER_MIN);
+      delta.set((top ? from - m : m - from) * PX_PER_MIN);
 
       const isClamped = m !== raw;
       if (isClamped && !clamped.get()) scheduleOnRN(onLimit);
@@ -84,12 +92,15 @@ export function useEdgeDrag({
     },
     onDeactivate: () => {
       'worklet';
+      const from = startEdge.get();
       const s = snapped.get();
-      const target = (top ? edgeMin - s : s - edgeMin) * PX_PER_MIN;
+      const target = (top ? from - s : s - from) * PX_PER_MIN;
       delta.set(
         withSpring(target, SNAP_SPRING, () => {
           'worklet';
           following.set(false);
+          edgeValue.set(s);
+          delta.set(0);
           scheduleOnRN(onCommit, s);
         }),
       );

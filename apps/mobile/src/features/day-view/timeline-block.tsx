@@ -1,5 +1,5 @@
 import { cn } from '@planner/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -28,37 +28,35 @@ interface Props {
   entry: TimelineEntry;
   column: number;
   columns: number;
-  /** The grid's visible window: positions are relative to its start, and drags stay inside it. */
+  /** The grid's visible window: drags stay inside it. */
   window: TimeWindow;
   onMove: (id: string, startMin: number) => void;
   onDragChange: (dragging: boolean) => void;
 }
 
-/** One block on the timeline. Planner items can be long-pressed and dragged to a new 15-minute slot. */
+/**
+ * One block on the timeline. Planner items can be long-pressed and dragged to a new 15-minute slot.
+ * Positioned by absolute time of day (minute 0 = top of the day), so changing the grid's visible
+ * window never moves it; only moving the item itself does.
+ */
 export function TimelineBlock({ entry, column, columns, window, onMove, onDragChange }: Props) {
   const duration = entry.endMin - entry.startMin;
   const height = Math.max(duration, MIN_BLOCK_MIN) * PX_PER_MIN;
-  const origin = window.startMin;
   const minStart = window.startMin;
   const maxStart = Math.max(minStart, window.endMin - duration);
 
-  const top = useSharedValue((entry.startMin - origin) * PX_PER_MIN);
+  const top = useSharedValue(entry.startMin * PX_PER_MIN);
   const baseMin = useSharedValue(entry.startMin); // committed start, where the drag began
   const snapMin = useSharedValue(entry.startMin); // slot under the finger right now
   const active = useSharedValue(false);
   const [previewMin, setPreviewMin] = useState<number | null>(null);
 
   // A committed move (or a data change from sync later) springs the block to its new slot.
-  // If the window itself moved (the grid grew or shrank at the top), jump instead: the hour lines
-  // jump too, so a spring would make the block drift against them.
-  const lastOrigin = useRef(origin);
   useEffect(() => {
-    const target = (entry.startMin - origin) * PX_PER_MIN;
     baseMin.set(entry.startMin);
     snapMin.set(entry.startMin);
-    top.set(lastOrigin.current === origin ? withSpring(target, SPRING) : target);
-    lastOrigin.current = origin;
-  }, [entry.startMin, origin, baseMin, snapMin, top]);
+    top.set(withSpring(entry.startMin * PX_PER_MIN, SPRING));
+  }, [entry.startMin, baseMin, snapMin, top]);
 
   const handleLift = () => {
     haptics.lift();
@@ -89,7 +87,7 @@ export function TimelineBlock({ entry, column, columns, window, onMove, onDragCh
       const snapped = Math.min(maxStart, Math.max(minStart, Math.round(raw / SNAP_MIN) * SNAP_MIN));
       if (snapped !== snapMin.get()) {
         snapMin.set(snapped);
-        top.set(withSpring((snapped - origin) * PX_PER_MIN, SPRING));
+        top.set(withSpring(snapped * PX_PER_MIN, SPRING));
         scheduleOnRN(handleSnap, snapped);
       }
     },
@@ -97,7 +95,7 @@ export function TimelineBlock({ entry, column, columns, window, onMove, onDragCh
       'worklet';
       if (e.canceled) {
         snapMin.set(baseMin.get());
-        top.set(withSpring((baseMin.get() - origin) * PX_PER_MIN, SPRING));
+        top.set(withSpring(baseMin.get() * PX_PER_MIN, SPRING));
         scheduleOnRN(handleDrop, null);
       } else {
         scheduleOnRN(handleDrop, snapMin.get());
