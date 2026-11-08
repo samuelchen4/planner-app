@@ -31,4 +31,6 @@ export interface TimelineEntry {
   /** Planner items can be checked off; calendar events can't (they have no checkbox). */
   checkable: boolean;
   done: boolean;
+  /** A list (a task with entries of its own): drawn with a small list icon by its title. */
+  isList: boolean;
 }

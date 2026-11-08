@@ -1,16 +1,18 @@
 import '../global.css';
 
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { TopTabs } from 'expo-router/js-top-tabs';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { GlassTabBar } from '@/features/tabs/glass-tab-bar';
-import { TabBarScrollProvider } from '@/features/tabs/tab-bar-scroll';
+import { PlannerStoreProvider } from '@/lib/planner-store';
 import { SettingsProvider } from '@/lib/settings';
-import { TABS } from '@/lib/tabs';
 import { useColors, useScheme, useThemeStyle } from '@/lib/theme';
 
+/**
+ * Root: providers, then a stack with the tab pager underneath and the item details sheet
+ * (`item/[id]`) presented over it. The sheet is a native iOS form sheet: it slides up from the
+ * bottom over the current screen and swipes down to close.
+ */
 export default function RootLayout() {
   const scheme = useScheme();
   const colors = useColors();
@@ -19,23 +21,32 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SettingsProvider>
-        <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <View style={[{ flex: 1 }, themeStyle]}>
-            {/* Swipeable pager of tabs (side by side, follows the finger) with a floating glass
-                tab bar whose bubble tracks the swipe. Order comes from TABS. */}
-            <TabBarScrollProvider>
-              <TopTabs
-                tabBarPosition="bottom"
-                tabBar={(props) => <GlassTabBar {...props} />}
-                screenOptions={{ lazy: false, sceneStyle: { backgroundColor: colors.app } }}
+        <PlannerStoreProvider>
+          <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <View style={[{ flex: 1 }, themeStyle]}>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.app },
+                }}
               >
-                {TABS.map((tab) => (
-                  <TopTabs.Screen key={tab.name} name={tab.name} options={{ title: tab.label }} />
-                ))}
-              </TopTabs>
-            </TabBarScrollProvider>
-          </View>
-        </ThemeProvider>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen
+                  name="item/[id]"
+                  options={{
+                    presentation: 'formSheet',
+                    // Opens at full height (a sliver of the screen behind shows at the top);
+                    // swiping down closes it.
+                    sheetAllowedDetents: [1],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 24,
+                    contentStyle: { backgroundColor: colors.app },
+                  }}
+                />
+              </Stack>
+            </View>
+          </ThemeProvider>
+        </PlannerStoreProvider>
       </SettingsProvider>
     </GestureHandlerRootView>
   );

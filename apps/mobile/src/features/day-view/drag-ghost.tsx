@@ -9,6 +9,7 @@ import { BlockBody } from './timeline-block';
 export interface GhostTask {
   title: string;
   done: boolean;
+  isList: boolean;
   look: 'row' | 'block';
   width: number;
   height: number;
@@ -30,7 +31,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
       style={[styles.ghost, { width: task.width, height: task.height }, style]}
     >
       {task.look === 'row' ? (
-        <AnytimeRowBody title={task.title} done={task.done} />
+        <AnytimeRowBody title={task.title} done={task.done} isList={task.isList} />
       ) : (
         <BlockBody
           title={task.title}
@@ -39,6 +40,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
           compact={task.height < 40}
           planner
           done={task.done}
+          isList={task.isList}
         />
       )}
     </Animated.View>

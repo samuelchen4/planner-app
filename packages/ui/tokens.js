@@ -33,6 +33,27 @@ const palette = {
   },
 };
 
+/**
+ * Sticky-note colours a list can take (user-chosen, so applied as style values, not classes):
+ * `paper` fills the note, `edge` draws its border. Green is left out: it's reserved for `done`.
+ */
+const noteColors = {
+  light: {
+    yellow: { paper: '#FFF7CC', edge: '#EBCB4B' },
+    pink: { paper: '#FFE4EC', edge: '#EE9AB6' },
+    blue: { paper: '#E1F0FF', edge: '#86BCEB' },
+    orange: { paper: '#FFEAD6', edge: '#F0AC6E' },
+    lavender: { paper: '#EEE8FF', edge: '#B3A0F7' },
+  },
+  dark: {
+    yellow: { paper: '#37301A', edge: '#8C7628' },
+    pink: { paper: '#381F28', edge: '#8F4A63' },
+    blue: { paper: '#1A2A38', edge: '#3F6C93' },
+    orange: { paper: '#382819', edge: '#8F5E33' },
+    lavender: { paper: '#28233D', edge: '#6A58B5' },
+  },
+};
+
 /** iOS-style type scale (matches Apple's default Dynamic Type sizes). [fontSize, lineHeight] in px. */
 const typeScale = {
   'large-title': ['34px', '41px'],
@@ -61,4 +82,4 @@ function themeVariables(scheme) {
   );
 }
 
-module.exports = { palette, typeScale, themeVariables };
+module.exports = { palette, noteColors, typeScale, themeVariables };

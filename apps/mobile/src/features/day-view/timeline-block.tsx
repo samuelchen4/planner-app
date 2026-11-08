@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import {
   GestureDetector,
   useCompetingGestures,
+  useExclusiveGestures,
   usePanGesture,
   useTapGesture,
 } from 'react-native-gesture-handler';
@@ -15,9 +16,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
 import { haptics } from '@/lib/haptics';
+import { openItem } from '@/lib/open-item';
 
 import { Checkbox } from './checkbox';
+import { ListIcon } from './list-icon';
 import { follow, liftAt, type TaskDragHandlers } from './drag-layer';
 import { formatTime } from './time';
 import { MIN_BLOCK_MIN, PX_PER_MIN, type TimelineEntry } from './timeline-constants';
@@ -84,8 +88,18 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
     haptics.check();
     onToggleDone(entry.id);
   };
+  // A single tap anywhere else on the block opens its details (it waits for a possible double tap,
+  // and a tap on the check never opens it: the check's tap blocks this one).
+  const openTap = useTapGesture({
+    maxDuration: 250,
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(openItem, entry.id);
+    },
+  });
   const tap = useTapGesture({
     enabled: entry.checkable,
+    block: openTap,
     maxDuration: 250,
     // The check is drawn small; the touch area reaches ~44pt.
     hitSlop: { top: 13, bottom: 13, left: 4, right: 8 },
@@ -101,13 +115,14 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
   const doubleTap = useTapGesture({
     enabled: entry.checkable,
     numberOfTaps: 2,
-    maxDelay: 300,
+    maxDelay: DOUBLE_TAP_MAX_DELAY_MS,
     onActivate: () => {
       'worklet';
       scheduleOnRN(handleToggle);
     },
   });
-  const blockGesture = useCompetingGestures(pan, doubleTap);
+  const taps = useExclusiveGestures(doubleTap, openTap);
+  const blockGesture = useCompetingGestures(pan, taps);
 
   const startMin = entry.startMin;
   const compact = height < 40;
@@ -138,6 +153,7 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
           compact={compact}
           planner={planner}
           done={done}
+          isList={entry.isList}
           check={
             entry.checkable && (
               <GestureDetector gesture={tap}>
@@ -163,6 +179,8 @@ interface BlockBodyProps {
   done: boolean;
   /** The check, drawn at the right of the title row (planner items only). */
   check?: ReactNode;
+  /** A list: a small list icon follows the title. */
+  isList?: boolean;
 }
 
 /** A block's look: tinted card, coloured stripe, title row (title … check) and the time. */
@@ -174,6 +192,7 @@ export function BlockBody({
   planner,
   done,
   check,
+  isList = false,
 }: BlockBodyProps) {
   return (
     <View
@@ -196,6 +215,7 @@ export function BlockBody({
           >
             {title}
           </Text>
+          {isList && <ListIcon />}
           {compact && (
             <Text
               numberOfLines={1}
@@ -224,13 +244,14 @@ export interface DropPreview {
   endMin: number;
   /** Still held by the finger (lifted look) vs dropped and settling in. */
   lifted: boolean;
+  isList?: boolean;
 }
 
 /**
  * Where a dragged Anytime task would land: a block at its absolute time of day, over the others,
  * springing from slot to slot as the finger moves.
  */
-export function PreviewBlock({ title, startMin, endMin, lifted }: DropPreview) {
+export function PreviewBlock({ title, startMin, endMin, lifted, isList }: DropPreview) {
   const height = Math.max(endMin - startMin, MIN_BLOCK_MIN) * PX_PER_MIN;
   const top = useSharedValue(startMin * PX_PER_MIN);
   useEffect(() => {
@@ -252,6 +273,7 @@ export function PreviewBlock({ title, startMin, endMin, lifted }: DropPreview) {
         compact={height < 40}
         planner
         done={false}
+        isList={isList}
         check={
           <View className="items-end justify-center pl-2" style={styles.checkTarget}>
             <Checkbox done={false} size={CHECK_SIZE} />

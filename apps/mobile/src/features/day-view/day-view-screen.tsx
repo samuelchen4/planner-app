@@ -2,13 +2,14 @@ import { useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { View } from 'react-native';
 
+import { usePlannerStore } from '@/lib/planner-store';
+
 import { DateHeader } from './date-header';
 import { DayCanvas, type DayCanvasHandle } from './day-canvas';
 import { moveItemTo, scheduleItem, toggleItemDone, unscheduleItem } from './day-entries';
 import { buildDayRange } from './day-range';
 import { DragGhost, type GhostTask } from './drag-ghost';
 import { useDragLayer } from './drag-layer';
-import { mockDayEntries } from './mock-data';
 
 /**
  * The day view: a sticky date header floating over an infinite canvas of days.
@@ -18,7 +19,7 @@ import { mockDayEntries } from './mock-data';
 export function DayViewScreen() {
   const range = useMemo(() => buildDayRange(), []);
   const [selected, setSelected] = useState(range.todayKey);
-  const [entries, setEntries] = useState(mockDayEntries);
+  const { entries, setEntries } = usePlannerStore();
   const [headerHeight, setHeaderHeight] = useState(0);
   const canvasRef = useRef<DayCanvasHandle>(null);
 

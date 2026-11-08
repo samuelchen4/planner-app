@@ -7,7 +7,11 @@ export type IsoDateTime = string;
 /** Calendar date, e.g. '2026-11-05' (used for all-day items) */
 export type IsoDate = string;
 
-export type PlannerItemType = 'task' | 'time_block' | 'habit' | 'note';
+/**
+ * Everything the user makes is a planner item. A 'list' is an item too (it can be dated, timed and
+ * moved like any task); its entries are items with `listId` pointing at it.
+ */
+export type PlannerItemType = 'task' | 'time_block' | 'habit' | 'note' | 'list';
 
 /** Something the user created in this app. We own the shape. */
 export interface PlannerItem {
@@ -27,9 +31,16 @@ export interface PlannerItem {
   status: 'open' | 'done' | 'cancelled';
   /** When it was checked off (set together with status 'done'). */
   completedAt?: IsoDateTime;
+  /** An entry of a list: the list item's id. List entries have no times or dates of their own. */
+  listId?: string;
+  /** Lists only: their sticky-note colour (a key of the UI's `noteColors`). */
+  color?: ListColor;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
+
+/** Sticky-note colours a list can take (green is reserved for done). */
+export type ListColor = 'yellow' | 'pink' | 'blue' | 'orange' | 'lavender';
 
 export type CalendarProvider = 'google';
 

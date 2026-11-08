@@ -19,12 +19,15 @@ export interface AnytimeTask {
   id: string;
   title: string;
   done: boolean;
+  /** A list (see TimelineEntry.isList). */
+  isList: boolean;
 }
 
 /**
  * Entries grouped by local day ('YYYY-MM-DD'): timed ones for the grids, untimed planner tasks for
  * each day's Anytime list. An untimed task sits on its `allDayDate`; one with no date at all is in
- * the inbox, which shows as today's Anytime list.
+ * the inbox, which shows as today's Anytime list. Lists are tasks too, but an undated list stays on
+ * the Lists page (it isn't in the inbox); list entries never show here (they live in their list).
  */
 export function bucketEntries(entries: DayEntry[], todayKey: string) {
   const timedByDay = new Map<string, TimelineEntry[]>();
@@ -34,11 +37,14 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
     const isItem = e.kind === 'item';
     const { id, title, startAt, endAt, status } = isItem ? e.item : e.event;
     if (status === 'cancelled') continue;
+    if (isItem && e.item.listId) continue;
+    const isList = isItem && e.item.type === 'list';
     if (!startAt) {
       if (isItem) {
+        if (isList && !e.item.allDayDate) continue;
         const key = e.item.allDayDate ?? todayKey;
         const list = anytimeByDay.get(key) ?? [];
-        list.push({ id, title, done: status === 'done' });
+        list.push({ id, title, done: status === 'done', isList });
         anytimeByDay.set(key, list);
       }
       continue;
@@ -57,6 +63,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
       tone: isItem ? 'planner' : 'calendar',
       checkable: isItem,
       done: status === 'done',
+      isList,
     });
     timedByDay.set(day, list);
   }

@@ -100,6 +100,7 @@ interface ActiveDrag {
   id: string;
   title: string;
   done: boolean;
+  isList: boolean;
   source: 'anytime' | 'block';
   /** The day it was picked up from. */
   sourceDay: number;
@@ -140,7 +141,8 @@ const targetKey = (t: DropTarget) =>
 const NO_ENTRIES: TimelineEntry[] = [];
 
 /** A day's timed tasks and their times: a manual stretch lasts only while this stays the same. */
-const tasksSig = (es: TimelineEntry[]) => es.map((e) => `${e.id}@${e.startMin}-${e.endMin}`).join('|');
+const tasksSig = (es: TimelineEntry[]) =>
+  es.map((e) => `${e.id}@${e.startMin}-${e.endMin}`).join('|');
 const NO_TASKS: AnytimeTask[] = [];
 
 export interface DayCanvasHandle {
@@ -448,6 +450,7 @@ export function DayCanvas({
   const ghostFor = (d: ActiveDrag, look: GhostTask['look']): GhostTask => ({
     title: d.title,
     done: d.done,
+    isList: d.isList,
     look,
     width: look === 'row' || !d.home ? rowWidth : d.home.width,
     height: look === 'row' || !d.home ? ANYTIME_ROW_H : d.home.height,
@@ -603,6 +606,7 @@ export function DayCanvas({
           id: t.id,
           title: t.title,
           done: t.done,
+          isList: t.isList,
           source: 'anytime',
           sourceDay: range.indexOf.get(key) ?? range.todayIndex,
           durationMin: DROP_DURATION_MIN,
@@ -620,6 +624,7 @@ export function DayCanvas({
           id: e.id,
           title: e.title,
           done: e.done,
+          isList: e.isList,
           source: 'block',
           sourceDay: day,
           durationMin: e.endMin - e.startMin,
@@ -844,6 +849,7 @@ export function DayCanvas({
               drag && target?.kind === 'grid' && target.day === index
                 ? {
                     title: drag.title,
+                    isList: drag.isList,
                     startMin: target.startMin,
                     endMin: target.startMin + drag.durationMin,
                     lifted: !dropping,

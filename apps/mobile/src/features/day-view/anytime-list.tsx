@@ -4,15 +4,19 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import {
   GestureDetector,
   useCompetingGestures,
+  useExclusiveGestures,
   usePanGesture,
   useTapGesture,
 } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
 import { haptics } from '@/lib/haptics';
+import { openItem } from '@/lib/open-item';
 
 import { Checkbox } from './checkbox';
+import { ListIcon } from './list-icon';
 import type { AnytimeTask } from './day-entries';
 import { follow, liftAt, type TaskDragHandlers } from './drag-layer';
 import { PopIn } from './morph';
@@ -48,11 +52,14 @@ export function AnytimeRowBody({
   title,
   done,
   check,
+  isList = false,
 }: {
   title: string;
   done: boolean;
   /** The checkbox, wrapped in its own tap target (the floating copy draws a plain one). */
   check?: ReactNode;
+  /** A list: a small list icon follows the title. */
+  isList?: boolean;
 }) {
   return (
     <View
@@ -72,6 +79,7 @@ export function AnytimeRowBody({
         >
           {title}
         </Text>
+        {isList && <ListIcon />}
         <View className="flex-1" />
         {check ?? (
           <View className="pl-2">
@@ -249,7 +257,17 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
 
   // A quick tap on the check toggles done (like a block's). A long press still drags: the pan takes
   // over at LONG_PRESS_MS, which cancels the tap.
+  // A single tap anywhere else on the row opens its details (it waits for a possible double tap,
+  // and a tap on the check never opens it: the check's tap blocks this one).
+  const openTap = useTapGesture({
+    maxDuration: 250,
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(openItem, task.id);
+    },
+  });
   const checkTap = useTapGesture({
+    block: openTap,
     maxDuration: 250,
     // The check is drawn small; the touch area reaches ~44pt.
     hitSlop: { top: 6, bottom: 6, left: 4, right: 6 },
@@ -258,11 +276,10 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
       scheduleOnRN(toggle);
     },
   });
-  // Double-tap anywhere on the row toggles done too (a single tap elsewhere does nothing, so
-  // scrolling past can't check it off).
+  // Double-tap anywhere on the row toggles done too.
   const tap = useTapGesture({
     numberOfTaps: 2,
-    maxDelay: 300,
+    maxDelay: DOUBLE_TAP_MAX_DELAY_MS,
     onActivate: () => {
       'worklet';
       scheduleOnRN(toggle);
@@ -284,7 +301,8 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
       scheduleOnRN(onEnd, !!e.canceled);
     },
   });
-  const gesture = useCompetingGestures(pan, tap);
+  const taps = useExclusiveGestures(tap, openTap);
+  const gesture = useCompetingGestures(pan, taps);
 
   // Collapsing (or growing in): the row and the gap it brings scale with `shown` (1 = full). The
   // first row has no gap above it, so it pulls the next row up by one gap instead.
@@ -328,6 +346,7 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
           <AnytimeRowBody
             title={task.title}
             done={task.done}
+            isList={task.isList}
             check={
               <GestureDetector gesture={checkTap}>
                 <View className="h-full items-end justify-center pl-3">
