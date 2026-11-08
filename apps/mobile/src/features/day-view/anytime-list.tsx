@@ -1,4 +1,5 @@
 import { cn } from '@planner/ui';
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import {
   GestureDetector,
@@ -43,7 +44,16 @@ const LONG_PRESS_MS = 300;
 const CHECK_SIZE = 16;
 
 /** An all-day task's look (like a grid block, without a time). Shared with the floating copy. */
-export function AnytimeRowBody({ title, done }: { title: string; done: boolean }) {
+export function AnytimeRowBody({
+  title,
+  done,
+  check,
+}: {
+  title: string;
+  done: boolean;
+  /** The checkbox, wrapped in its own tap target (the floating copy draws a plain one). */
+  check?: ReactNode;
+}) {
   return (
     <View
       className={cn(
@@ -63,9 +73,11 @@ export function AnytimeRowBody({ title, done }: { title: string; done: boolean }
           {title}
         </Text>
         <View className="flex-1" />
-        <View className="pl-2">
-          <Checkbox done={done} size={CHECK_SIZE} />
-        </View>
+        {check ?? (
+          <View className="pl-2">
+            <Checkbox done={done} size={CHECK_SIZE} />
+          </View>
+        )}
       </View>
     </View>
   );
@@ -235,7 +247,19 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
     onStart({ kind: 'anytime', id: task.id });
   };
 
-  // Double-tap toggles done (a single tap does nothing, so scrolling past can't check it off).
+  // A quick tap on the check toggles done (like a block's). A long press still drags: the pan takes
+  // over at LONG_PRESS_MS, which cancels the tap.
+  const checkTap = useTapGesture({
+    maxDuration: 250,
+    // The check is drawn small; the touch area reaches ~44pt.
+    hitSlop: { top: 6, bottom: 6, left: 4, right: 6 },
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(toggle);
+    },
+  });
+  // Double-tap anywhere on the row toggles done too (a single tap elsewhere does nothing, so
+  // scrolling past can't check it off).
   const tap = useTapGesture({
     numberOfTaps: 2,
     maxDelay: 300,
@@ -301,7 +325,17 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
           accessibilityHint="Long-press and drag onto the schedule to give it a time"
           style={{ height: ANYTIME_ROW_H, opacity: faded ? 0.35 : 1 }}
         >
-          <AnytimeRowBody title={task.title} done={task.done} />
+          <AnytimeRowBody
+            title={task.title}
+            done={task.done}
+            check={
+              <GestureDetector gesture={checkTap}>
+                <View className="h-full items-end justify-center pl-3">
+                  <Checkbox done={task.done} size={CHECK_SIZE} />
+                </View>
+              </GestureDetector>
+            }
+          />
         </View>
       </GestureDetector>
     </Animated.View>
