@@ -1,6 +1,6 @@
 import type { DayEntry, ExternalEvent, PlannerItem } from '@planner/core';
 
-import { isoAtMinutes, toLocalIso } from './time';
+import { addDays, dateKey, isoAtMinutes, toLocalIso } from './time';
 
 // Stand-in until PowerSync is wired up. Same shape as the planned tables,
 // so swapping this for a live query later doesn't touch the UI.
@@ -12,12 +12,16 @@ const at = (when: string) => {
   return isoAtMinutes(now, Number(dayOffset) * 24 * 60 + h * 60 + m);
 };
 
+/** Local 'YYYY-MM-DD' for today + offset days. */
+const dayKey = (offset: number) => dateKey(addDays(new Date(), offset));
+
 const item = (
   id: string,
   type: PlannerItem['type'],
   title: string,
   start?: string,
   end?: string,
+  allDayDate?: string,
 ): DayEntry => ({
   kind: 'item',
   item: {
@@ -27,6 +31,7 @@ const item = (
     title,
     startAt: start && at(start),
     endAt: end && at(end),
+    allDayDate,
     status: 'open',
     createdAt: now,
     updatedAt: now,
@@ -64,4 +69,6 @@ export const mockDayEntries: DayEntry[] = [
   google('ext-5', 'Dentist', '+1 10:00', '+1 11:00'),
   // Before the default 7 AM start: tomorrow's grid stretches up to 6 AM to fit it.
   item('item-7', 'time_block', 'Long run', '+1 06:00', '+1 07:00'),
+  // An Anytime task on tomorrow (untimed, dated).
+  item('item-8', 'task', 'Call the bank', undefined, undefined, dayKey(1)),
 ];

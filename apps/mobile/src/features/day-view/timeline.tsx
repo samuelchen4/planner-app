@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { useColors } from '@/lib/theme';
 
+import type { TaskDragHandlers } from './drag-layer';
 import { layoutColumns } from './layout';
 import { formatHour, MINUTES_PER_DAY, minutesOfDay } from './time';
 import {
@@ -10,22 +11,22 @@ import {
   MIN_BLOCK_MIN,
   PX_PER_MIN,
   type TimelineEntry,
-  type TimeWindow,
 } from './timeline-constants';
-import { TimelineBlock } from './timeline-block';
+import { PreviewBlock, TimelineBlock, type DropPreview } from './timeline-block';
 
 const LABEL_HEIGHT = 16;
 const NOW_DOT = 10;
 
 interface Props {
   entries: TimelineEntry[];
-  /** The visible slice of the day; only used to keep block drags inside it. */
-  window: TimeWindow;
-  onMove: (id: string, startMin: number) => void;
+  drag: TaskDragHandlers;
+  /** The lifted task, if it's one of this day's blocks (drawn faded in place). */
+  draggingId: string | null;
   onToggleDone: (id: string) => void;
-  onDragChange: (dragging: boolean) => void;
   /** Draw the current-time line (only when the grid shows today). */
   showNow?: boolean;
+  /** An Anytime task being dragged over this day: where it would land. */
+  preview?: DropPreview | null;
 }
 
 // Every hour line of the day (midnight sits above the earliest possible window, 12:01 AM).
@@ -38,11 +39,11 @@ const HOURS = Array.from({ length: 23 }, (_, i) => i + 1);
  */
 export function Timeline({
   entries,
-  window,
-  onMove,
+  drag,
+  draggingId,
   onToggleDone,
-  onDragChange,
   showNow = true,
+  preview,
 }: Props) {
   const colors = useColors();
   const nowMin = useNowMinutes();
@@ -61,12 +62,12 @@ export function Timeline({
             entry={item}
             column={column}
             columns={columns}
-            window={window}
-            onMove={onMove}
+            drag={drag}
+            faded={item.id === draggingId}
             onToggleDone={onToggleDone}
-            onDragChange={onDragChange}
           />
         ))}
+        {preview && <PreviewBlock {...preview} />}
       </View>
 
       {showNow && (

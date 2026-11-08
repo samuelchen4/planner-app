@@ -23,19 +23,25 @@ export interface AnytimeTask {
 }
 
 /**
- * Timed entries grouped by local day ('YYYY-MM-DD'). Untimed tasks have no date yet, so they act
- * as today's inbox (the "Anytime" list).
+ * Entries grouped by local day ('YYYY-MM-DD'): timed ones for the grids, untimed planner tasks for
+ * each day's Anytime list. An untimed task sits on its `allDayDate`; one with no date at all is in
+ * the inbox, which shows as today's Anytime list.
  */
-export function bucketEntries(entries: DayEntry[]) {
+export function bucketEntries(entries: DayEntry[], todayKey: string) {
   const timedByDay = new Map<string, TimelineEntry[]>();
-  const anytime: AnytimeTask[] = [];
+  const anytimeByDay = new Map<string, AnytimeTask[]>();
 
   for (const e of entries) {
     const isItem = e.kind === 'item';
     const { id, title, startAt, endAt, status } = isItem ? e.item : e.event;
     if (status === 'cancelled') continue;
     if (!startAt) {
-      if (isItem) anytime.push({ id, title, done: status === 'done' });
+      if (isItem) {
+        const key = e.item.allDayDate ?? todayKey;
+        const list = anytimeByDay.get(key) ?? [];
+        list.push({ id, title, done: status === 'done' });
+        anytimeByDay.set(key, list);
+      }
       continue;
     }
     const startMin = minutesOfDay(startAt);
@@ -55,7 +61,7 @@ export function bucketEntries(entries: DayEntry[]) {
     });
     timedByDay.set(day, list);
   }
-  return { timedByDay, anytime };
+  return { timedByDay, anytimeByDay };
 }
 
 /**
@@ -146,23 +152,56 @@ const clampWindow = (startMin: number, endMin: number): TimeWindow => ({
   endMin: Math.min(SCHEDULE_MAX_END, endMin),
 });
 
-/** Move a timed planner item to a new start on the same day, keeping its duration. */
-export function moveItem(entries: DayEntry[], id: string, startMin: number): DayEntry[] {
+/** Move a timed planner item to `day` at `startMin`, keeping its duration. */
+export function moveItemTo(
+  entries: DayEntry[],
+  id: string,
+  day: Date,
+  startMin: number,
+): DayEntry[] {
+  const dayIso = toLocalIso(day);
   return entries.map((e) => {
     if (e.kind !== 'item' || e.item.id !== id || !e.item.startAt) return e;
     const { startAt, endAt } = e.item;
-    const oldStart = minutesOfDay(startAt);
-    const duration = endAt ? minutesOfDay(endAt) - oldStart : DEFAULT_DURATION_MIN;
+    const duration = endAt
+      ? Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60_000)
+      : DEFAULT_DURATION_MIN;
     return {
       ...e,
       item: {
         ...e.item,
-        startAt: isoAtMinutes(startAt, startMin),
-        endAt: isoAtMinutes(startAt, startMin + duration),
+        startAt: isoAtMinutes(dayIso, startMin),
+        endAt: isoAtMinutes(dayIso, startMin + duration),
         updatedAt: toLocalIso(new Date()),
       },
     };
   });
+}
+
+/**
+ * Make a planner item an Anytime task on `day` (no time), placed just before `beforeId` in the
+ * list order (or last when null). Lists follow the entries' order for now; a real sort key comes
+ * with the data model.
+ */
+export function unscheduleItem(
+  entries: DayEntry[],
+  id: string,
+  day: Date,
+  beforeId: string | null = null,
+): DayEntry[] {
+  const target = entries.find((e) => e.kind === 'item' && e.item.id === id);
+  if (!target || target.kind !== 'item') return entries;
+  const item = {
+    ...target.item,
+    startAt: undefined,
+    endAt: undefined,
+    allDayDate: dateKey(day),
+    updatedAt: toLocalIso(new Date()),
+  };
+  const rest = entries.filter((e) => e !== target);
+  const at = beforeId ? rest.findIndex((e) => e.kind === 'item' && e.item.id === beforeId) : -1;
+  const moved: DayEntry = { kind: 'item', item };
+  return at < 0 ? [...rest, moved] : [...rest.slice(0, at), moved, ...rest.slice(at)];
 }
 
 /** Check a planner item off, or un-check it. */
@@ -178,6 +217,30 @@ export function toggleItemDone(entries: DayEntry[], id: string): DayEntry[] {
         status: done ? 'done' : 'open',
         completedAt: done ? now : undefined,
         updatedAt: now,
+      },
+    };
+  });
+}
+
+/** Give an untimed (Anytime) task a time: `day` at `startMin`, lasting `durationMin`. */
+export function scheduleItem(
+  entries: DayEntry[],
+  id: string,
+  day: Date,
+  startMin: number,
+  durationMin: number,
+): DayEntry[] {
+  const dayIso = toLocalIso(day);
+  return entries.map((e) => {
+    if (e.kind !== 'item' || e.item.id !== id) return e;
+    return {
+      ...e,
+      item: {
+        ...e.item,
+        startAt: isoAtMinutes(dayIso, startMin),
+        endAt: isoAtMinutes(dayIso, startMin + durationMin),
+        allDayDate: undefined,
+        updatedAt: toLocalIso(new Date()),
       },
     };
   });

@@ -12,9 +12,11 @@ import { haptics } from '@/lib/haptics';
 
 import { useCanvasScroll } from './canvas-scroll';
 import { contentBounds, edgeRange, type Edge } from './day-entries';
+import type { TaskDragHandlers } from './drag-layer';
 import { EDGE_HANDLE_H, EdgeHandle, useEdgeDrag } from './edge-handle';
 import { formatEdge } from './time';
 import { Timeline } from './timeline';
+import type { DropPreview } from './timeline-block';
 import {
   GRID_PAD_Y,
   gridHeight,
@@ -30,11 +32,14 @@ interface Props {
   window: TimeWindow;
   entries: TimelineEntry[];
   isToday: boolean;
-  onMove: (id: string, startMin: number) => void;
+  drag: TaskDragHandlers;
+  draggingId: string | null;
   onToggleDone: (id: string) => void;
   onDragChange: (dragging: boolean) => void;
   /** An edge was dragged and released: set it to `minutes`. */
   onEdgeCommit: (edge: Edge, minutes: number) => void;
+  /** An Anytime task being dragged over this day: where it would land. */
+  dropPreview?: DropPreview | null;
 }
 
 /**
@@ -56,10 +61,12 @@ export function DayGrid({
   window,
   entries,
   isToday,
-  onMove,
+  drag,
+  draggingId,
   onToggleDone,
   onDragChange,
   onEdgeCommit,
+  dropPreview,
 }: Props) {
   const { listRef, scrollY } = useCanvasScroll();
   const bounds = useMemo(() => contentBounds(entries), [entries]);
@@ -107,18 +114,24 @@ export function DayGrid({
     ...callbacks('bottom'),
   });
 
+  // Worklets below must only capture the shared values, never the `top`/`bottom` objects: those
+  // also hold the gestures, which can't be copied to the UI thread.
+  const topDelta = top.delta;
+  const topFollowing = top.following;
+  const bottomDelta = bottom.delta;
+
   // Top edge: scroll the canvas in lockstep with the drag so the grid itself never moves.
   const scrollAnchor = useSharedValue(0);
   useAnimatedReaction(
-    () => top.following.get(),
+    () => topFollowing.get(),
     (on, was) => {
       if (on && !was) scrollAnchor.set(scrollY.get());
     },
   );
   useAnimatedReaction(
-    () => top.delta.get(),
+    () => topDelta.get(),
     (d) => {
-      if (top.following.get()) scrollTo(listRef, 0, scrollAnchor.get() + d, false);
+      if (topFollowing.get()) scrollTo(listRef, 0, scrollAnchor.get() + d, false);
     },
   );
 
@@ -126,12 +139,12 @@ export function DayGrid({
     height:
       GRID_PAD_Y * 2 +
       (endValue.get() - startValue.get()) * PX_PER_MIN +
-      top.delta.get() +
-      bottom.delta.get(),
+      topDelta.get() +
+      bottomDelta.get(),
   }));
   // Shift the whole day up so the window's start lands just below the top padding.
   const dayStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: GRID_PAD_Y - startValue.get() * PX_PER_MIN + top.delta.get() }],
+    transform: [{ translateY: GRID_PAD_Y - startValue.get() * PX_PER_MIN + topDelta.get() }],
   }));
 
   // Labels: while dragging, where the edge will land; otherwise a hint of the next hour beyond it.
@@ -156,11 +169,11 @@ export function DayGrid({
         <Animated.View style={dayStyle}>
           <Timeline
             entries={entries}
-            window={window}
-            onMove={onMove}
+            drag={drag}
+            draggingId={draggingId}
             onToggleDone={onToggleDone}
-            onDragChange={onDragChange}
             showNow={isToday}
+            preview={dropPreview}
           />
         </Animated.View>
       </Animated.View>
