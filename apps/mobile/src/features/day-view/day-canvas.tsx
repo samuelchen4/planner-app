@@ -1,5 +1,4 @@
 import { SCHEDULE_MAX_END, type DayEntry } from '@planner/core';
-import { Card, cn } from '@planner/ui';
 import {
   useEffect,
   useImperativeHandle,
@@ -15,7 +14,6 @@ import {
   useWindowDimensions,
   View,
   type FlatList as RNFlatList,
-  type ViewStyle,
 } from 'react-native';
 import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 import Animated, {
@@ -38,7 +36,12 @@ import { haptics } from '@/lib/haptics';
 import { useSettings } from '@/lib/settings';
 
 import {
-  ANYTIME_LABEL_H,
+  ANYTIME_EMPTY_H,
+  ANYTIME_LANE_INSET,
+  ANYTIME_LANE_LEFT,
+  ANYTIME_PAD,
+  DropBox,
+  EmptyCard,
   ANYTIME_ROW_GAP,
   ANYTIME_ROW_H,
   AnytimeList,
@@ -58,6 +61,7 @@ import {
 } from './day-entries';
 import { DayGrid, dayGridHeight } from './day-grid';
 import type { DayRange } from './day-range';
+import { GrowIn, MORPH_MS, ShrinkOut } from './morph';
 import type { GhostTask } from './drag-ghost';
 import type { DragLayer, DragSource, TaskDragHandlers } from './drag-layer';
 import { EDGE_HANDLE_H } from './edge-handle';
@@ -75,7 +79,8 @@ import {
 // and map a scroll offset back to a day without measuring anything. Keep these in sync with the JSX.
 const DAY_LABEL_H = 40;
 /** A day with nothing on it (other than today) gets a short card instead of a grid. */
-const EMPTY_CARD_H = 52;
+// Same height as the empty all-day box (one all-day task).
+const EMPTY_CARD_H = ANYTIME_EMPTY_H;
 const cardHeight = (w: TimeWindow | null) => (w ? dayGridHeight(w) : EMPTY_CARD_H);
 const DAY_GAP = 16;
 const FOOTER_H = 32;
@@ -90,7 +95,6 @@ const AUTO_MAX_SPEED = 1.1;
 /** Auto-scroll waits until the finger has moved this far from where it lifted the task. */
 const ARM_DISTANCE = 12;
 const BACK_SPRING = { damping: 20, stiffness: 260, mass: 0.7 };
-
 /** A task being dragged (an Anytime row or a planner block). */
 interface ActiveDrag {
   id: string;
@@ -133,8 +137,10 @@ const targetKey = (t: DropTarget) =>
         ? `n${t.day}`
         : `${t.day}:${t.startMin}`;
 
-
 const NO_ENTRIES: TimelineEntry[] = [];
+
+/** A day's timed tasks and their times: a manual stretch lasts only while this stays the same. */
+const tasksSig = (es: TimelineEntry[]) => es.map((e) => `${e.id}@${e.startMin}-${e.endMin}`).join('|');
 const NO_TASKS: AnytimeTask[] = [];
 
 export interface DayCanvasHandle {
@@ -201,17 +207,23 @@ export function DayCanvas({
   /** Day i's Anytime tasks. */
   const anytimeOf = (i: number) => anytimeByDay.get(range.keys[i]) ?? NO_TASKS;
 
-  // Manual edges from the stretch handles, per day. Session-only: they reset on reload.
-  const [stretches, setStretches] = useState<Map<string, WindowStretch>>(() => new Map());
-  // Each day's window: its natural one (see dayWindow) with any manual edges applied.
+  // Manual edges from the stretch handles, per day, with the day's tasks as they were then
+  // (`sig`). Once a task on that day is added, moved or removed, the stretch no longer applies and
+  // the grid hugs its tasks again (DayGrid animates the change).
+  const [stretches, setStretches] = useState<Map<string, { edges: WindowStretch; sig: string }>>(
+    () => new Map(),
+  );
+  // Each day's window: its tasks' span (see dayWindow) with any still-valid manual edges applied.
   const windows = useMemo(
     () =>
-      range.keys.map((k, i) => {
+      range.keys.map((k) => {
         const dayEntries = timedByDay.get(k) ?? NO_ENTRIES;
-        const base = dayWindow(dayEntries, schedule, i === range.todayIndex);
-        return base && applyStretch(base, stretches.get(k), contentBounds(dayEntries));
+        const base = dayWindow(dayEntries);
+        const stretch = stretches.get(k);
+        const edges = stretch?.sig === tasksSig(dayEntries) ? stretch.edges : undefined;
+        return base && applyStretch(base, edges, contentBounds(dayEntries));
       }),
-    [range, timedByDay, schedule, stretches],
+    [range, timedByDay, stretches],
   );
 
   // Content starts under the floating header. On iOS the list already insets for the status bar
@@ -219,31 +231,23 @@ export function DayCanvas({
   const spacer = Math.max(0, headerHeight - (Platform.OS === 'ios' ? insets.top : 0));
   const minOffset = spacer - headerHeight;
 
-  /** Height of day i's Anytime section: shown when it has tasks, and always on today. */
-  const anytimeSection = (i: number) => {
-    const n = anytimeOf(i).length;
-    return n > 0 || i === range.todayIndex ? anytimeHeight(n) : 0;
-  };
+  /** Height of day i's all-day card (every day has one; see anytime-list). */
+  const anytimeSection = (i: number) => anytimeHeight(anytimeOf(i).length);
 
   // Where each day section starts (prefix sums); starts[i + 1] - starts[i] is day i's height.
   const starts = useMemo(() => {
     const s = [spacer];
     for (let i = 0; i < range.days.length; i++) {
       const key = range.keys[i];
-      const n = anytimeByDay.get(key)?.length ?? 0;
-      const shown = n > 0 || i === range.todayIndex;
-      s.push(s[i] + DAY_LABEL_H + (shown ? anytimeHeight(n) : 0) + cardHeight(windows[i]) + DAY_GAP);
+      const allDay = anytimeHeight(anytimeByDay.get(key)?.length ?? 0);
+      s.push(s[i] + DAY_LABEL_H + allDay + cardHeight(windows[i]) + DAY_GAP);
     }
     return s;
   }, [range, anytimeByDay, spacer, windows]);
 
   /** Content y of the top of day i's window (its first visible minute). */
   const gridTop = (i: number) =>
-    starts[i] +
-    DAY_LABEL_H +
-    anytimeSection(i) +
-    EDGE_HANDLE_H +
-    GRID_PAD_Y;
+    starts[i] + DAY_LABEL_H + anytimeSection(i) + EDGE_HANDLE_H + GRID_PAD_Y;
 
   /** Content y of a time of day on day i (clamped into that day's window). */
   const timeY = (i: number, minutes: number) => {
@@ -315,12 +319,15 @@ export function DayCanvas({
     const current = edge === 'top' ? w.startMin : w.endMin;
     if (minutes === current) return;
     const key = range.keys[day];
-    setStretches((prev) =>
-      new Map(prev).set(key, {
-        ...prev.get(key),
-        [edge === 'top' ? 'startMin' : 'endMin']: minutes,
-      }),
-    );
+    const sig = tasksSig(timedByDay.get(key) ?? NO_ENTRIES);
+    setStretches((prev) => {
+      const kept = prev.get(key);
+      const edges = kept?.sig === sig ? kept.edges : {};
+      return new Map(prev).set(key, {
+        sig,
+        edges: { ...edges, [edge === 'top' ? 'startMin' : 'endMin']: minutes },
+      });
+    });
   };
 
   const handleScroll = (y: number) => {
@@ -340,7 +347,9 @@ export function DayCanvas({
   // layout (a slot on any day's grid, or any day's Anytime list), shows grid targets as a preview
   // block in that grid, and auto-scrolls near the top/bottom of the screen.
   const { width: screenWidth } = useWindowDimensions();
-  const rowWidth = screenWidth - PAGE_PAD_X * 2;
+  // All-day rows sit in the card's lane, like blocks (left edge on screen, width).
+  const laneLeft = PAGE_PAD_X + ANYTIME_LANE_LEFT;
+  const rowWidth = screenWidth - PAGE_PAD_X * 2 - ANYTIME_LANE_INSET;
   const [drag, setDrag] = useState<ActiveDrag | null>(null);
   const dragRef = useRef<ActiveDrag | null>(null);
   const [target, setTarget] = useState<DropTarget>(null);
@@ -359,6 +368,17 @@ export function DayCanvas({
   // section) grows in (0 → 1).
   const [addingId, setAddingId] = useState<string | null>(null);
   const addProgress = useSharedValue(0);
+  // Days that just got a grid (it grows out of the "Drop to schedule" box), and one that just lost
+  // its only block (its grid shrinks into "Nothing scheduled" as `shrinkProgress` goes 0 → 1,
+  // with the canvas scrolling in step if it's above the view). Also a day whose last all-day task
+  // just left (its empty box pops in).
+  const [growing, setGrowing] = useState<string | null>(null);
+  const [shrinking, setShrinking] = useState<{ key: string; window: TimeWindow } | null>(null);
+  const shrinkProgress = useSharedValue(0);
+  const shrinkAnchor = useSharedValue(0);
+  const shrinkShift = useSharedValue(0);
+  const pendingShrinkShift = useRef(0);
+  const [emptied, setEmptied] = useState<string | null>(null);
   // Auto-scroll on the UI thread while a task is held near the top or bottom of the screen.
   const zoneTop = useSharedValue(0);
   const zoneBottom = useSharedValue(0);
@@ -402,12 +422,11 @@ export function DayCanvas({
     const i = dayAt(y);
     const cardTop = starts[i] + DAY_LABEL_H + anytimeSection(i);
     // The date label and the Anytime list both mean "this day, anytime", at the gap between rows
-    // nearest the finger. (Nothing opens mid-drag: days without a list show a box in their label
-    // row.) A row dropped back on its own day just goes back.
+    // nearest the finger. A row dropped back on its own day just goes back.
     if (y < cardTop) {
       if (d.source === 'anytime' && i === d.sourceDay) return null;
       const n = anytimeOf(i).length;
-      const listTop = starts[i] + DAY_LABEL_H + ANYTIME_LABEL_H;
+      const listTop = starts[i] + DAY_LABEL_H + ANYTIME_PAD;
       const gap = Math.round((y - listTop) / (ANYTIME_ROW_H + ANYTIME_ROW_GAP));
       return { kind: 'anytime', day: i, index: Math.max(0, Math.min(n, gap)) };
     }
@@ -443,8 +462,8 @@ export function DayCanvas({
     const fx = dragLayer.fingerX.get();
     const fy = dragLayer.fingerY.get();
     if (look === 'row' || !d.home) {
-      // Rows line up with the page column, held by their middle.
-      dragLayer.grabX.set(fx - PAGE_PAD_X);
+      // Rows line up with the lane, held by their middle.
+      dragLayer.grabX.set(fx - laneLeft);
       dragLayer.grabY.set(ANYTIME_ROW_H / 2);
     } else {
       dragLayer.grabX.set(d.home.grabX);
@@ -458,21 +477,23 @@ export function DayCanvas({
   const updateTarget = (fingerY: number) => {
     fingerRef.current = fingerY;
     const d = dragRef.current;
-    if (!d) return;
-    const next = hitTest(fingerY, d);
+    if (d) applyTarget(d, hitTest(fingerY, d));
+  };
+
+  /** Show `next` as the drop target (preview, highlight, haptic, the floating copy's look). */
+  const applyTarget = (d: ActiveDrag, next: DropTarget) => {
     const prev = targetRef.current;
     if (targetKey(next) === targetKey(prev)) return;
     targetRef.current = next;
     setTarget(next);
     if (next) haptics.tick();
-    // Over a grid the task shows as a preview block there, so the floating copy fades out. Over
-    // an Anytime list it looks like a row; anywhere else (a new-grid box too), like what was
-    // picked up.
+    // Over a grid the task shows as a preview block there, so the floating copy fades out;
+    // anywhere else it looks like an all-day task.
     const onGrid = next?.kind === 'grid';
     if (onGrid !== (prev?.kind === 'grid')) {
       dragLayer.opacity.set(withTiming(onGrid ? 0 : 1, { duration: 120 }));
     }
-    setLook(d, next?.kind === 'anytime' || d.source === 'anytime' ? 'row' : 'block');
+    setLook(d, 'row');
   };
 
   const finishDrag = () => {
@@ -487,12 +508,61 @@ export function DayCanvas({
     setDragging(false);
   };
 
+  /** Clear a one-off animation flag once its animation is over (so a re-render doesn't replay it). */
+  const clearLater = (clear: () => void) => setTimeout(clear, MORPH_MS + 80);
+
+  /** A day without a grid just got one: it grows out of its "Drop to schedule" box. */
+  const growGrid = (day: number) => {
+    const key = range.keys[day];
+    setGrowing(key);
+    clearLater(() => setGrowing((k) => (k === key ? null : k)));
+  };
+
+  /** A block left `day`: if it was that day's only one, its grid shrinks away. */
+  const shrinkGridIfEmptied = (day: number) => {
+    const w = windows[day];
+    if (!w) return;
+    if ((timedByDay.get(range.keys[day])?.length ?? 0) !== 1) return;
+    const from = dayGridHeight(w);
+    const bottom = starts[day] + DAY_LABEL_H + anytimeSection(day) + from;
+    pendingShrinkShift.current =
+      bottom <= offsetRef.current + headerHeight ? from - EMPTY_CARD_H : 0;
+    shrinkShift.set(0);
+    shrinkProgress.set(0);
+    setShrinking({ key: range.keys[day], window: w });
+  };
+  // Start shrinking once the shell is rendered (at 0), so the scroll and height move together.
+  useEffect(() => {
+    if (!shrinking) return;
+    shrinkAnchor.set(scrollY.get());
+    shrinkShift.set(pendingShrinkShift.current);
+    shrinkProgress.set(
+      withTiming(1, { duration: MORPH_MS }, () => {
+        'worklet';
+        scheduleOnRN(setShrinking, null);
+      }),
+    );
+  }, [shrinking, shrinkAnchor, shrinkShift, shrinkProgress, scrollY]);
+  useAnimatedReaction(
+    () => shrinkProgress.get(),
+    (p) => {
+      const shift = shrinkShift.get();
+      if (shift) scrollTo(listRef, 0, shrinkAnchor.get() - shift * p, false);
+    },
+  );
+
+  /** An all-day task left `day`: if it was the last one, the empty box pops in. */
+  const popEmptyIfEmptied = (day: number) => {
+    if (anytimeOf(day).length !== 1) return;
+    const key = range.keys[day];
+    setEmptied(key);
+    clearLater(() => setEmptied((k) => (k === key ? null : k)));
+  };
+
   /**
-   * A task joins a day's Anytime list: its row grows in, or the whole section if the day had none.
-   * (Today's empty list swaps its hint row for the task: same height, nothing to animate.)
+   * A task joins a day's all-day list: its row grows in (or, replacing the empty box, pops in).
    */
   const growInto = (id: string, day: number) => {
-    if (day === range.todayIndex && anytimeOf(day).length === 0) return;
     addProgress.set(0);
     setAddingId(id);
     addProgress.set(
@@ -516,6 +586,7 @@ export function DayCanvas({
   const commitAnytime = (id: string, drop: NonNullable<DropTarget>) => {
     if (drop.kind === 'anytime') dropIntoAnytime(id, drop.day, drop.index);
     else {
+      if (drop.kind === 'newGrid') growGrid(drop.day);
       const start = drop.kind === 'grid' ? drop.startMin : newGridStart();
       onScheduleItem(id, range.days[drop.day], start, DROP_DURATION_MIN);
     }
@@ -568,9 +639,11 @@ export function DayCanvas({
     if (!d) return;
     dragRef.current = d;
     targetRef.current = null;
+    // The floating copy always looks like an all-day task (a grid shows a block preview instead).
     lookRef.current = d.source === 'anytime' ? 'row' : 'block';
     setDrag(d);
     onDragTaskChange(ghostFor(d, lookRef.current));
+    setLook(d, 'row');
     setDragging(true);
     armed.set(false);
     autoScrolling.set(false);
@@ -591,18 +664,14 @@ export function DayCanvas({
       // Collapse the row first, then land the task (see removeProgress).
       setDropping(true);
       dragLayer.opacity.set(withTiming(0, { duration: 150 }));
-      const today = d.sourceDay === range.todayIndex;
-      if (today && fromList.length === 1) {
-        // Today's last task: its list swaps to the hint row (same height), nothing to collapse.
+      if (fromList.length === 1) {
+        // Its list's last task: the empty box takes its place (same height) and pops in.
+        popEmptyIfEmptied(d.sourceDay);
         commitAnytime(d.id, drop);
         return;
       }
-      // The row collapses; another day's only task takes its whole section with it.
-      const wholeSection = fromList.length === 1;
-      const collapsed = wholeSection ? anytimeHeight(1) : ANYTIME_ROW_H + ANYTIME_ROW_GAP;
-      const bottom = wholeSection
-        ? starts[d.sourceDay] + DAY_LABEL_H + anytimeHeight(1)
-        : rowTop + ANYTIME_ROW_H;
+      const collapsed = ANYTIME_ROW_H + ANYTIME_ROW_GAP;
+      const bottom = rowTop + ANYTIME_ROW_H;
       const aboveView = bottom <= offsetRef.current + headerHeight;
       removeShift.set(0);
       removeProgress.set(0);
@@ -620,6 +689,8 @@ export function DayCanvas({
 
     if (drop && d.source === 'block') {
       dragLayer.opacity.set(withTiming(0, { duration: 150 }));
+      if (!(drop.kind === 'grid' && drop.day === d.sourceDay)) shrinkGridIfEmptied(d.sourceDay);
+      if (drop.kind === 'newGrid') growGrid(drop.day);
       if (drop.kind === 'anytime') {
         // Its new row grows in at that spot in the day's list while the copy fades away.
         dropIntoAnytime(d.id, drop.day, drop.index);
@@ -634,7 +705,7 @@ export function DayCanvas({
     }
 
     // Nowhere to land: fly back to where it was picked up and settle in.
-    let homeX = PAGE_PAD_X;
+    let homeX = laneLeft;
     let homeY = rowTop;
     if (d.home) {
       const w = windows[d.home.day];
@@ -682,8 +753,30 @@ export function DayCanvas({
   );
 
   const extraData = useMemo(
-    () => [windows, target, drag, dropping, removingId, addingId, anytimeByDay],
-    [windows, target, drag, dropping, removingId, addingId, anytimeByDay],
+    () => [
+      windows,
+      target,
+      drag,
+      dropping,
+      removingId,
+      addingId,
+      anytimeByDay,
+      growing,
+      shrinking,
+      emptied,
+    ],
+    [
+      windows,
+      target,
+      drag,
+      dropping,
+      removingId,
+      addingId,
+      anytimeByDay,
+      growing,
+      shrinking,
+      emptied,
+    ],
   );
 
   const onScroll = useAnimatedScrollHandler({
@@ -734,18 +827,19 @@ export function DayCanvas({
             entries={timedByDay.get(range.keys[index]) ?? NO_ENTRIES}
             window={windows[index]}
             anytime={anytimeOf(index)}
-            showAnytime={anytimeSection(index) > 0}
             drag={dragHandlers}
             draggingId={drag?.id ?? null}
             dragActive={drag !== null}
-            anytimeInsert={
-              target?.kind === 'anytime' && target.day === index ? target.index : null
-            }
+            anytimeInsert={target?.kind === 'anytime' && target.day === index ? target.index : null}
             newGridTarget={target?.kind === 'newGrid' && target.day === index}
             removingId={removingId}
             removeProgress={removeProgress}
             addingId={addingId}
             addProgress={addProgress}
+            growIn={growing === range.keys[index]}
+            shrinkWindow={shrinking?.key === range.keys[index] ? shrinking.window : null}
+            shrinkProgress={shrinkProgress}
+            emptyAppear={emptied === range.keys[index]}
             preview={
               drag && target?.kind === 'grid' && target.day === index
                 ? {
@@ -773,7 +867,6 @@ interface DaySectionProps {
   /** null: nothing scheduled (not today), so no grid. */
   window: TimeWindow | null;
   anytime: AnytimeTask[];
-  showAnytime: boolean;
   drag: TaskDragHandlers;
   draggingId: string | null;
   /** A task is being dragged: missing sections show as dotted drop boxes. */
@@ -786,6 +879,13 @@ interface DaySectionProps {
   removeProgress: SharedValue<number>;
   addingId: string | null;
   addProgress: SharedValue<number>;
+  /** Its grid was just created: it grows out of the empty box. */
+  growIn: boolean;
+  /** Its grid was just emptied: this was its window, shrinking into the empty box. */
+  shrinkWindow: TimeWindow | null;
+  shrinkProgress: SharedValue<number>;
+  /** Its last all-day task just left: the empty box pops in. */
+  emptyAppear: boolean;
   preview: DropPreview | null;
   onToggleDone: (id: string) => void;
   onDragChange: (dragging: boolean) => void;
@@ -799,7 +899,6 @@ function DaySection({
   entries,
   window,
   anytime,
-  showAnytime,
   drag,
   draggingId,
   dragActive,
@@ -809,105 +908,92 @@ function DaySection({
   removeProgress,
   addingId,
   addProgress,
+  growIn,
+  shrinkWindow,
+  shrinkProgress,
+  emptyAppear,
   preview,
   onToggleDone,
   onDragChange,
   onEdgeCommit,
 }: DaySectionProps) {
-  const anytimeTarget = anytimeInsert !== null;
   const label = date.toLocaleDateString(undefined, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
   });
 
+  const grid = (w: TimeWindow, gridEntries: TimelineEntry[]) => (
+    <DayGrid
+      window={w}
+      entries={gridEntries}
+      isToday={isToday}
+      drag={drag}
+      draggingId={draggingId}
+      onToggleDone={onToggleDone}
+      onDragChange={onDragChange}
+      onEdgeCommit={onEdgeCommit}
+      dropPreview={preview}
+    />
+  );
+
   return (
     <View>
-      <View style={{ height: DAY_LABEL_H }} className="flex-row items-end gap-2 px-1 pb-1.5">
-        <View className="flex-row items-center gap-2 pb-0.5">
-          {isToday && <Text className="text-subhead text-accent font-semibold">Today</Text>}
-          <Text className="text-subhead text-muted font-semibold">{label}</Text>
-        </View>
-        {/* No Anytime list yet: while dragging, a box here stands in for it (drop creates it). */}
-        {dragActive && !showAnytime && (
-          <DropBox label="Anytime" highlighted={anytimeTarget} className="ml-auto h-7 px-3" />
-        )}
+      <View style={{ height: DAY_LABEL_H }} className="flex-row items-end gap-2 px-1 pb-2">
+        {isToday && <Text className="text-subhead text-accent font-semibold">Today</Text>}
+        <Text className="text-subhead text-muted font-semibold">{label}</Text>
       </View>
 
-      {showAnytime && (
-        <AnytimeList
-          tasks={anytime}
-          isToday={isToday}
-          onToggleDone={onToggleDone}
-          drag={drag}
-          draggingId={draggingId}
-          highlighted={anytimeTarget}
-          insertAt={anytimeInsert}
-          removingId={removingId}
-          removeProgress={removeProgress}
-          addingId={addingId}
-          addProgress={addProgress}
-        />
-      )}
-
-      {window ? (
-        <DayGrid
-          window={window}
-          entries={entries}
-          isToday={isToday}
-          drag={drag}
-          draggingId={draggingId}
-          onToggleDone={onToggleDone}
-          onDragChange={onDragChange}
-          onEdgeCommit={onEdgeCommit}
-          dropPreview={preview}
-        />
-      ) : dragActive ? (
-        // No grid yet: while dragging, a box stands in for it (drop creates it).
-        <DropBox
-          label="Drop to schedule"
-          highlighted={newGridTarget}
-          style={{ height: EMPTY_CARD_H }}
-        />
+      {anytime.length === 0 && !window && !dragActive && !shrinkWindow && !emptyAppear ? (
+        // A day with nothing at all: one card the size of both empty ones (and the gap between),
+        // so it can split into the two drop boxes when a drag starts without moving anything.
+        <EmptyCard label="Nothing scheduled" height={anytimeHeight(0) + EMPTY_CARD_H} />
       ) : (
-        <Card className="justify-center py-0" style={{ height: EMPTY_CARD_H }}>
-          <Text className="text-subhead text-subtle">Nothing scheduled</Text>
-        </Card>
+        <>
+          <AnytimeList
+            tasks={anytime}
+            onToggleDone={onToggleDone}
+            drag={drag}
+            dragActive={dragActive}
+            draggingId={draggingId}
+            insertAt={anytimeInsert}
+            removingId={removingId}
+            removeProgress={removeProgress}
+            addingId={addingId}
+            addProgress={addProgress}
+            emptyAppear={emptyAppear}
+          />
+
+          {window ? (
+            growIn ? (
+              <GrowIn from={EMPTY_CARD_H} to={dayGridHeight(window)}>
+                {grid(window, entries)}
+              </GrowIn>
+            ) : (
+              grid(window, entries)
+            )
+          ) : shrinkWindow ? (
+            <ShrinkOut
+              from={dayGridHeight(shrinkWindow)}
+              to={EMPTY_CARD_H}
+              progress={shrinkProgress}
+              replacement={<EmptyCard label="Nothing scheduled" height={EMPTY_CARD_H} />}
+            >
+              {grid(shrinkWindow, NO_ENTRIES)}
+            </ShrinkOut>
+          ) : dragActive ? (
+            // No grid yet: while dragging, a box stands in for it (drop creates it).
+            <DropBox
+              label="Drop to schedule"
+              highlighted={newGridTarget}
+              style={{ height: EMPTY_CARD_H }}
+            />
+          ) : (
+            <EmptyCard label="Nothing scheduled" height={EMPTY_CARD_H} />
+          )}
+        </>
       )}
       <View style={{ height: DAY_GAP }} />
-    </View>
-  );
-}
-
-/** A dotted drop zone standing in for a section a day doesn't have yet. */
-function DropBox({
-  label,
-  highlighted,
-  className,
-  style,
-}: {
-  label: string;
-  highlighted: boolean;
-  className?: string;
-  style?: ViewStyle;
-}) {
-  return (
-    <View
-      style={style}
-      className={cn(
-        'items-center justify-center rounded-2xl border border-dashed',
-        highlighted ? 'border-accent bg-accent/10' : 'border-subtle',
-        className,
-      )}
-    >
-      <Text
-        className={cn(
-          highlighted ? 'text-accent' : 'text-subtle',
-          'text-subhead font-medium',
-        )}
-      >
-        {label}
-      </Text>
     </View>
   );
 }

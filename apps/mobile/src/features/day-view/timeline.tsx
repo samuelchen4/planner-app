@@ -6,12 +6,7 @@ import { useColors } from '@/lib/theme';
 import type { TaskDragHandlers } from './drag-layer';
 import { layoutColumns } from './layout';
 import { formatHour, MINUTES_PER_DAY, minutesOfDay } from './time';
-import {
-  GUTTER_WIDTH,
-  MIN_BLOCK_MIN,
-  PX_PER_MIN,
-  type TimelineEntry,
-} from './timeline-constants';
+import { GUTTER_WIDTH, MIN_BLOCK_MIN, PX_PER_MIN, type TimelineEntry } from './timeline-constants';
 import { PreviewBlock, TimelineBlock, type DropPreview } from './timeline-block';
 
 const LABEL_HEIGHT = 16;

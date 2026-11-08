@@ -166,7 +166,15 @@ interface BlockBodyProps {
 }
 
 /** A block's look: tinted card, coloured stripe, title row (title … check) and the time. */
-export function BlockBody({ title, startMin, endMin, compact, planner, done, check }: BlockBodyProps) {
+export function BlockBody({
+  title,
+  startMin,
+  endMin,
+  compact,
+  planner,
+  done,
+  check,
+}: BlockBodyProps) {
   return (
     <View
       className={cn(
@@ -236,10 +244,7 @@ export function PreviewBlock({ title, startMin, endMin, lifted }: DropPreview) {
   }));
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[styles.block, styles.preview, { height }, style]}
-    >
+    <Animated.View pointerEvents="none" style={[styles.block, styles.preview, { height }, style]}>
       <BlockBody
         title={title}
         startMin={startMin}

@@ -2,10 +2,12 @@ import { Card } from '@planner/ui';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
+  Easing,
   scrollTo,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 
 import { haptics } from '@/lib/haptics';
@@ -14,6 +16,7 @@ import { useCanvasScroll } from './canvas-scroll';
 import { contentBounds, edgeRange, type Edge } from './day-entries';
 import type { TaskDragHandlers } from './drag-layer';
 import { EDGE_HANDLE_H, EdgeHandle, useEdgeDrag } from './edge-handle';
+import { MORPH_MS } from './morph';
 import { formatEdge } from './time';
 import { Timeline } from './timeline';
 import type { DropPreview } from './timeline-block';
@@ -78,10 +81,11 @@ export function DayGrid({
   const endValue = useSharedValue(window.endMin);
   const { startMin, endMin } = window;
   useLayoutEffect(() => {
-    // Only differs when the window changed some other way (data, settings); after a drag it
-    // already matches.
-    if (startValue.get() !== startMin) startValue.set(startMin);
-    if (endValue.get() !== endMin) endValue.set(endMin);
+    // Only differs when the window changed some other way (its tasks changed, so it hugs them
+    // again): ease to it. After a handle drag it already matches.
+    const ease = { duration: MORPH_MS, easing: Easing.out(Easing.cubic) };
+    if (startValue.get() !== startMin) startValue.set(withTiming(startMin, ease));
+    if (endValue.get() !== endMin) endValue.set(withTiming(endMin, ease));
   }, [startMin, endMin, startValue, endValue]);
 
   const callbacks = (edge: Edge) => ({

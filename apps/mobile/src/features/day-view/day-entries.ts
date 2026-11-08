@@ -3,7 +3,6 @@ import {
   SCHEDULE_MIN_SPAN,
   SCHEDULE_MIN_START,
   type DayEntry,
-  type ScheduleSettings,
 } from '@planner/core';
 
 import {
@@ -65,40 +64,21 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
 }
 
 /**
- * What a day's grid shows, never past 12:01 AM – 11:59 PM:
- * - today: at least the configured default window, stretched to whole hours to fit anything outside it;
- * - other days: just their events, first start to last end (null when there are none).
+ * What a day's grid shows: just its events, first start to last end, never past
+ * 12:01 AM – 11:59 PM (null when there are none, so the day shows "Nothing scheduled"). Today
+ * included: no open space around the day's tasks.
  */
-export function dayWindow(
-  entries: TimelineEntry[],
-  schedule: ScheduleSettings,
-  isToday: boolean,
-): TimeWindow | null {
-  if (isToday) {
-    let startMin = schedule.dayStartMin;
-    let endMin = schedule.dayEndMin;
-    for (const e of entries) {
-      startMin = Math.min(startMin, Math.floor(e.startMin / 60) * 60);
-      endMin = Math.max(endMin, Math.ceil(e.endMin / 60) * 60);
-    }
-    return clampWindow(startMin, endMin);
-  }
-
-  // Other days are compact: first event's start to the end of the last one. Nothing scheduled: no grid.
-  if (entries.length === 0) return null;
-  let startMin = Infinity;
-  let endMin = -Infinity;
-  for (const e of entries) {
-    startMin = Math.min(startMin, e.startMin);
-    // Short blocks are drawn MIN_BLOCK_MIN tall; make room for that so they aren't cut off.
-    endMin = Math.max(endMin, e.endMin, e.startMin + MIN_BLOCK_MIN);
-  }
-  return clampWindow(startMin, endMin);
+export function dayWindow(entries: TimelineEntry[]): TimeWindow | null {
+  const bounds = contentBounds(entries);
+  return bounds && clampWindow(bounds.first, bounds.last);
 }
 
 export type Edge = 'top' | 'bottom';
 
-/** A day's manual edges, set by dragging its edge handles (either way: grow or shrink). */
+/**
+ * A day's manual edges, set by dragging its edge handles (either way: grow or shrink). They only
+ * last until that day's timed tasks change; then the grid hugs its tasks again (see DayCanvas).
+ */
 export interface WindowStretch {
   startMin?: number;
   endMin?: number;
