@@ -33,4 +33,6 @@ export interface TimelineEntry {
   done: boolean;
   /** A list (a task with entries of its own): drawn with a small list icon by its title. */
   isList: boolean;
+  /** Has notes: drawn with a small note icon by its title. */
+  hasNotes: boolean;
 }

@@ -10,6 +10,7 @@ export interface GhostTask {
   title: string;
   done: boolean;
   isList: boolean;
+  hasNotes: boolean;
   look: 'row' | 'block';
   width: number;
   height: number;
@@ -31,7 +32,12 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
       style={[styles.ghost, { width: task.width, height: task.height }, style]}
     >
       {task.look === 'row' ? (
-        <AnytimeRowBody title={task.title} done={task.done} isList={task.isList} />
+        <AnytimeRowBody
+          title={task.title}
+          done={task.done}
+          isList={task.isList}
+          hasNotes={task.hasNotes}
+        />
       ) : (
         <BlockBody
           title={task.title}
@@ -41,6 +47,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
           planner
           done={task.done}
           isList={task.isList}
+          hasNotes={task.hasNotes}
         />
       )}
     </Animated.View>

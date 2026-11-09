@@ -5,7 +5,13 @@ import { Text } from 'react-native';
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
 import { toggleItemDone } from '@/features/day-view/day-entries';
-import { addDays, dateKey, formatTime, minutesOfDay } from '@/features/day-view/time';
+import {
+  dateKey,
+  formatTime,
+  minutesOfDay,
+  parseDateKey,
+  relativeDayName,
+} from '@/features/day-view/time';
 import { GestureScrollView } from '@/lib/gesture-scroll-view';
 import { usePlannerStore } from '@/lib/planner-store';
 
@@ -15,18 +21,7 @@ import { ListCard } from './list-card';
 function whenLabel(list: PlannerItem): string | null {
   const key = list.startAt ? dateKey(new Date(list.startAt)) : list.allDayDate;
   if (!key) return null;
-  const [y, m, d] = key.split('-').map(Number);
-  const day = new Date(y, m - 1, d);
-  const today = new Date();
-  const offset = Math.round((day.getTime() - addDays(today, 0).getTime()) / 86_400_000);
-  const name =
-    offset === 0
-      ? 'Today'
-      : offset === 1
-        ? 'Tomorrow'
-        : offset === -1
-          ? 'Yesterday'
-          : day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const name = relativeDayName(parseDateKey(key));
   return list.startAt ? `${name}, ${formatTime(minutesOfDay(list.startAt))}` : name;
 }
 

@@ -63,3 +63,18 @@ export function formatEdge(minutes: number): string {
 export function formatHour(hour: number): string {
   return `${hour % 12 === 0 ? 12 : hour % 12} ${hour < 12 ? 'AM' : 'PM'}`;
 }
+
+/** 'YYYY-MM-DD' -> local midnight of that day. */
+export function parseDateKey(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** 'Today', 'Tomorrow', 'Yesterday', else a short date like 'Tue, Nov 10'. */
+export function relativeDayName(day: Date, today: Date = new Date()): string {
+  const offset = Math.round((addDays(day, 0).getTime() - addDays(today, 0).getTime()) / 86_400_000);
+  if (offset === 0) return 'Today';
+  if (offset === 1) return 'Tomorrow';
+  if (offset === -1) return 'Yesterday';
+  return day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}

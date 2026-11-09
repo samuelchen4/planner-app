@@ -101,6 +101,7 @@ interface ActiveDrag {
   title: string;
   done: boolean;
   isList: boolean;
+  hasNotes: boolean;
   source: 'anytime' | 'block';
   /** The day it was picked up from. */
   sourceDay: number;
@@ -451,6 +452,7 @@ export function DayCanvas({
     title: d.title,
     done: d.done,
     isList: d.isList,
+    hasNotes: d.hasNotes,
     look,
     width: look === 'row' || !d.home ? rowWidth : d.home.width,
     height: look === 'row' || !d.home ? ANYTIME_ROW_H : d.home.height,
@@ -607,6 +609,7 @@ export function DayCanvas({
           title: t.title,
           done: t.done,
           isList: t.isList,
+          hasNotes: t.hasNotes,
           source: 'anytime',
           sourceDay: range.indexOf.get(key) ?? range.todayIndex,
           durationMin: DROP_DURATION_MIN,
@@ -625,6 +628,7 @@ export function DayCanvas({
           title: e.title,
           done: e.done,
           isList: e.isList,
+          hasNotes: e.hasNotes,
           source: 'block',
           sourceDay: day,
           durationMin: e.endMin - e.startMin,
@@ -850,6 +854,7 @@ export function DayCanvas({
                 ? {
                     title: drag.title,
                     isList: drag.isList,
+                    hasNotes: drag.hasNotes,
                     startMin: target.startMin,
                     endMin: target.startMin + drag.durationMin,
                     lifted: !dropping,

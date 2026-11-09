@@ -21,6 +21,7 @@ export interface AnytimeTask {
   done: boolean;
   /** A list (see TimelineEntry.isList). */
   isList: boolean;
+  hasNotes: boolean;
 }
 
 /**
@@ -39,12 +40,13 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
     if (status === 'cancelled') continue;
     if (isItem && e.item.listId) continue;
     const isList = isItem && e.item.type === 'list';
+    const hasNotes = isItem && !!e.item.notes?.trim();
     if (!startAt) {
       if (isItem) {
         if (isList && !e.item.allDayDate) continue;
         const key = e.item.allDayDate ?? todayKey;
         const list = anytimeByDay.get(key) ?? [];
-        list.push({ id, title, done: status === 'done', isList });
+        list.push({ id, title, done: status === 'done', isList, hasNotes });
         anytimeByDay.set(key, list);
       }
       continue;
@@ -64,6 +66,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
       checkable: isItem,
       done: status === 'done',
       isList,
+      hasNotes,
     });
     timedByDay.set(day, list);
   }

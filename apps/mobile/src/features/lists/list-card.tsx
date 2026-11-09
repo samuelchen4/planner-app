@@ -7,6 +7,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { ANYTIME_ROW_GAP, ANYTIME_ROW_H, AnytimeRowBody } from '@/features/day-view/anytime-list';
 import { Checkbox } from '@/features/day-view/checkbox';
+import { NoteIcon } from '@/features/day-view/list-icon';
 import { GestureScrollView } from '@/lib/gesture-scroll-view';
 import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
 import { haptics } from '@/lib/haptics';
@@ -86,6 +87,7 @@ function ListItemRow({ item, onToggle }: { item: PlannerItem; onToggle: () => vo
         <AnytimeRowBody
           title={item.title}
           done={done}
+          hasNotes={!!item.notes?.trim()}
           check={
             <GestureDetector gesture={checkTap}>
               <View className="h-full items-end justify-center pl-2">
@@ -145,6 +147,7 @@ export function ListCard({ list, items, when, onToggleList, onToggleItem }: Prop
           >
             {list.title}
           </Text>
+          {!!list.notes?.trim() && <NoteIcon />}
           <Text className="text-footnote text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
             {open === 0 ? 'All done' : `${open} left`}
           </Text>

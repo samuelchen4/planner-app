@@ -12,3 +12,13 @@ export function ListIcon() {
     </View>
   );
 }
+
+/** The subtle mark next to a task's title when it has notes. */
+export function NoteIcon() {
+  const colors = useColors();
+  return (
+    <View className="ml-1.5" accessibilityLabel="Has notes">
+      <SymbolView name="note.text" size={12} weight="semibold" tintColor={colors.muted} />
+    </View>
+  );
+}

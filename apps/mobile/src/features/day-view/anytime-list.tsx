@@ -16,7 +16,7 @@ import { haptics } from '@/lib/haptics';
 import { openItem } from '@/lib/open-item';
 
 import { Checkbox } from './checkbox';
-import { ListIcon } from './list-icon';
+import { ListIcon, NoteIcon } from './list-icon';
 import type { AnytimeTask } from './day-entries';
 import { follow, liftAt, type TaskDragHandlers } from './drag-layer';
 import { PopIn } from './morph';
@@ -53,6 +53,7 @@ export function AnytimeRowBody({
   done,
   check,
   isList = false,
+  hasNotes = false,
 }: {
   title: string;
   done: boolean;
@@ -60,6 +61,8 @@ export function AnytimeRowBody({
   check?: ReactNode;
   /** A list: a small list icon follows the title. */
   isList?: boolean;
+  /** Has notes: a small note icon follows the title. */
+  hasNotes?: boolean;
 }) {
   return (
     <View
@@ -80,6 +83,7 @@ export function AnytimeRowBody({
           {title}
         </Text>
         {isList && <ListIcon />}
+        {hasNotes && <NoteIcon />}
         <View className="flex-1" />
         {check ?? (
           <View className="pl-2">
@@ -347,6 +351,7 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
             title={task.title}
             done={task.done}
             isList={task.isList}
+            hasNotes={task.hasNotes}
             check={
               <GestureDetector gesture={checkTap}>
                 <View className="h-full items-end justify-center pl-3">
