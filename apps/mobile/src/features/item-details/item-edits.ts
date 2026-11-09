@@ -40,9 +40,7 @@ export function updateItem(
 
 /** Delete a planner item (and, for a list, its entries). */
 export function removeItem(entries: DayEntry[], id: string): DayEntry[] {
-  return entries.filter(
-    (e) => e.kind !== 'item' || (e.item.id !== id && e.item.listId !== id),
-  );
+  return entries.filter((e) => e.kind !== 'item' || (e.item.id !== id && e.item.listId !== id));
 }
 
 /** The entries of a list, in order. */
@@ -78,9 +76,7 @@ export function syncSubtasks(
 ): DayEntry[] {
   const parent = findItem(entries, parentId);
   if (!parent) return entries;
-  const keep = rows
-    .map((r) => ({ ...r, title: r.title.trim() }))
-    .filter((r) => r.title !== '');
+  const keep = rows.map((r) => ({ ...r, title: r.title.trim() })).filter((r) => r.title !== '');
   const stored = subtasksOf(entries, parentId);
   const same =
     keep.length === stored.length &&
@@ -129,7 +125,8 @@ export function itemTimes(item: PlannerItem): { start: number; end: number } | n
 export function setItemDate(entries: DayEntry[], id: string, day: Date | null): DayEntry[] {
   const item = findItem(entries, id);
   if (!item) return entries;
-  if (!day) return updateItem(entries, id, { startAt: undefined, endAt: undefined, allDayDate: undefined });
+  if (!day)
+    return updateItem(entries, id, { startAt: undefined, endAt: undefined, allDayDate: undefined });
   const times = itemTimes(item);
   if (!times) return updateItem(entries, id, { allDayDate: dateKey(day) });
   const base = toLocalIso(day);

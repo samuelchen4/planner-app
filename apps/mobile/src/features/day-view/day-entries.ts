@@ -39,6 +39,8 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
     const { id, title, startAt, endAt, status } = isItem ? e.item : e.event;
     if (status === 'cancelled') continue;
     if (isItem && e.item.listId) continue;
+    // Habits live on the Habits tab only.
+    if (isItem && e.item.type === 'habit') continue;
     const isList = isItem && e.item.type === 'list';
     const hasNotes = isItem && !!e.item.notes?.trim();
     if (!startAt) {

@@ -33,14 +33,30 @@ export interface PlannerItem {
   completedAt?: IsoDateTime;
   /** An entry of a list: the list item's id. List entries have no times or dates of their own. */
   listId?: string;
-  /** Lists only: their sticky-note colour (a key of the UI's `noteColors`). */
+  /** Lists and habits: their colour (a key of the UI's `noteColors`). */
   color?: ListColor;
+  /** Habits: the icon on their badge (an SF Symbol name for now; the web app maps it). */
+  icon?: string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
 
 /** Sticky-note colours a list can take (green is reserved for done). */
 export type ListColor = 'yellow' | 'pink' | 'blue' | 'orange' | 'lavender';
+
+/**
+ * One day of a habit. Habits are planner items (type 'habit', every day for now); their history
+ * is these rows, at most one per habit per day: whether it was done, and that day's note. A row
+ * with neither is deleted.
+ */
+export interface HabitDay {
+  habitId: string;
+  userId: string;
+  date: IsoDate;
+  done: boolean;
+  note?: string;
+  updatedAt: IsoDateTime;
+}
 
 export type CalendarProvider = 'google';
 

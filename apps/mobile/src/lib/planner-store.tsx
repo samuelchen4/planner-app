@@ -1,4 +1,4 @@
-import type { DayEntry } from '@planner/core';
+import type { DayEntry, HabitDay } from '@planner/core';
 import {
   createContext,
   use,
@@ -9,12 +9,16 @@ import {
 } from 'react';
 
 import { mockDayEntries } from '@/features/day-view/mock-data';
+import { mockHabitDays, mockHabits } from '@/features/habits/mock-data';
 import { mockListEntries } from '@/features/lists/mock-data';
 
 interface PlannerStore {
-  /** Every planner item (tasks, lists, list entries) and mirrored calendar event. */
+  /** Every planner item (tasks, lists, list entries, habits) and mirrored calendar event. */
   entries: DayEntry[];
   setEntries: Dispatch<SetStateAction<DayEntry[]>>;
+  /** Each habit's days: done or not, and that day's note. */
+  habitDays: HabitDay[];
+  setHabitDays: Dispatch<SetStateAction<HabitDay[]>>;
 }
 
 const PlannerStoreContext = createContext<PlannerStore | null>(null);
@@ -24,8 +28,17 @@ const PlannerStoreContext = createContext<PlannerStore | null>(null);
  * Today screen too). In memory with mock data for now; PowerSync's local database replaces it.
  */
 export function PlannerStoreProvider({ children }: { children: ReactNode }) {
-  const [entries, setEntries] = useState(() => [...mockDayEntries, ...mockListEntries]);
-  return <PlannerStoreContext value={{ entries, setEntries }}>{children}</PlannerStoreContext>;
+  const [entries, setEntries] = useState(() => [
+    ...mockDayEntries,
+    ...mockListEntries,
+    ...mockHabits,
+  ]);
+  const [habitDays, setHabitDays] = useState(mockHabitDays);
+  return (
+    <PlannerStoreContext value={{ entries, setEntries, habitDays, setHabitDays }}>
+      {children}
+    </PlannerStoreContext>
+  );
 }
 
 export function usePlannerStore(): PlannerStore {

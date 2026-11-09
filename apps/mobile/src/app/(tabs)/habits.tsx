@@ -1,5 +1,3 @@
-import { PlaceholderScreen } from '@/features/tabs/placeholder-screen';
+import { HabitsScreen } from '@/features/habits/habits-screen';
 
-export default function HabitsScreen() {
-  return <PlaceholderScreen title="Habits" body="Recurring habits and streaks go here." />;
-}
+export default HabitsScreen;

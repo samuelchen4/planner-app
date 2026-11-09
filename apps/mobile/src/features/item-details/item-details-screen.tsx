@@ -12,7 +12,6 @@ import {
   Text,
   TextInput,
   View,
-  type TextInputProps,
 } from 'react-native';
 
 import { ANYTIME_ROW_H } from '@/features/day-view/anytime-list';
@@ -25,6 +24,8 @@ import {
   toLocalIso,
 } from '@/features/day-view/time';
 import { haptics } from '@/lib/haptics';
+import { HabitHistory } from '@/features/habits/habit-history';
+import { HabitBadge, HabitLookPicker } from '@/features/habits/habit-look';
 import { usePlannerStore } from '@/lib/planner-store';
 import { useColors, useThemeStyle } from '@/lib/theme';
 
@@ -39,6 +40,7 @@ import {
   syncSubtasks,
   updateItem,
 } from './item-edits';
+import { DraftInput } from './draft-input';
 import { CalendarPicker, TimeWheel } from './pickers';
 
 /**
@@ -113,6 +115,8 @@ function ItemDetails({ item }: { item: PlannerItem }) {
   const [picker, setPicker] = useState<Picker>(null);
   const [edge, setEdge] = useState<'start' | 'end'>('start');
 
+  const isHabit = item.type === 'habit';
+  const [editingLook, setEditingLook] = useState(false);
   const key = itemDayKey(item);
   const day = key ? parseDateKey(key) : null;
   const times = itemTimes(item);
@@ -146,66 +150,102 @@ function ItemDetails({ item }: { item: PlannerItem }) {
 
   return (
     <>
-      {/* Header: title and subtasks */}
+      {/* Header: title (habits: with their badge and an Edit button), then subtasks */}
       <View className="gap-4">
-        <DraftInput
-          value={item.title}
-          onCommit={(title) => setEntries((prev) => updateItem(prev, item.id, { title }))}
-          placeholder="Title"
-          placeholderTextColor={colors.subtle}
-          multiline
-          scrollEnabled={false}
-          submitBehavior="blurAndSubmit"
-          returnKeyType="done"
-          className="font-rounded text-title2 text-ink p-0 font-bold"
-          accessibilityLabel="Title"
-        />
-        <Subtasks parent={item} />
+        <View className="flex-row items-center gap-3">
+          {isHabit && <HabitBadge habit={item} />}
+          <DraftInput
+            value={item.title}
+            onCommit={(title) => setEntries((prev) => updateItem(prev, item.id, { title }))}
+            placeholder="Title"
+            placeholderTextColor={colors.subtle}
+            multiline
+            scrollEnabled={false}
+            submitBehavior="blurAndSubmit"
+            returnKeyType="done"
+            className="font-rounded text-title2 text-ink flex-1 p-0 font-bold"
+            accessibilityLabel="Title"
+          />
+        </View>
+        {!isHabit && <Subtasks parent={item} />}
       </View>
 
-      {/* Body: when, then notes */}
-      <View className="bg-card rounded-card overflow-hidden">
-        <FieldRow
-          icon="calendar"
-          label="Date"
-          value={dayLabel(key)}
-          active={picker === 'date'}
-          onPress={openDate}
-          onClear={day ? () => setEntries((prev) => setItemDate(prev, item.id, null)) : undefined}
-        />
-        <Separator />
-        <FieldRow
-          icon="clock"
-          label="Time"
-          value={
-            times
-              ? `${formatTime(times.start)} – ${formatTime(times.end)}`
-              : day
-                ? 'All day'
-                : 'None'
-          }
-          active={picker === 'time'}
-          onPress={openTime}
-          onClear={times ? () => setEntries((prev) => clearItemTime(prev, item.id)) : undefined}
-        />
-      </View>
+      {/* Body: when (not for habits: they're every day, untimed), then notes */}
+      {!isHabit && (
+        <View className="bg-card rounded-card overflow-hidden">
+          <FieldRow
+            icon="calendar"
+            label="Date"
+            value={dayLabel(key)}
+            active={picker === 'date'}
+            onPress={openDate}
+            onClear={day ? () => setEntries((prev) => setItemDate(prev, item.id, null)) : undefined}
+          />
+          <Separator />
+          <FieldRow
+            icon="clock"
+            label="Time"
+            value={
+              times
+                ? `${formatTime(times.start)} – ${formatTime(times.end)}`
+                : day
+                  ? 'All day'
+                  : 'None'
+            }
+            active={picker === 'time'}
+            onPress={openTime}
+            onClear={times ? () => setEntries((prev) => clearItemTime(prev, item.id)) : undefined}
+          />
+        </View>
+      )}
 
-      <View className="bg-card rounded-card px-4 py-3">
-        <DraftInput
-          value={item.notes ?? ''}
-          onCommit={(notes) =>
-            setEntries((prev) => updateItem(prev, item.id, { notes: notes || undefined }))
-          }
-          placeholder="Notes"
-          placeholderTextColor={colors.subtle}
-          multiline
-          scrollEnabled={false}
-          textAlignVertical="top"
-          className="text-body text-ink p-0"
-          style={{ minHeight: 120 }}
-          accessibilityLabel="Notes"
+      {/* A habit's look (colour and icon) is set up separately from its content: Edit swaps the
+          history for the picker. */}
+      {isHabit && editingLook ? (
+        <HabitLookPicker
+          habit={item}
+          onChange={(patch) => setEntries((prev) => updateItem(prev, item.id, patch))}
         />
-      </View>
+      ) : isHabit ? (
+        // Habits: a calendar of done days and a note per day (instead of one note for the habit).
+        <HabitHistory habit={item} />
+      ) : (
+        <View className="bg-card rounded-card px-4 py-3">
+          <DraftInput
+            value={item.notes ?? ''}
+            onCommit={(notes) =>
+              setEntries((prev) => updateItem(prev, item.id, { notes: notes || undefined }))
+            }
+            placeholder="Notes"
+            placeholderTextColor={colors.subtle}
+            multiline
+            scrollEnabled={false}
+            textAlignVertical="top"
+            className="text-body text-ink p-0"
+            style={{ minHeight: 120 }}
+            accessibilityLabel="Notes"
+          />
+        </View>
+      )}
+
+      {isHabit && (
+        // Quiet on purpose: the look is set up once, the history is what you come here for.
+        <Pressable
+          onPress={() => setEditingLook((v) => !v)}
+          accessibilityRole="button"
+          className="border-border rounded-card min-h-11 flex-row items-center justify-center gap-2 active:opacity-60"
+          style={{ borderWidth: StyleSheet.hairlineWidth }}
+        >
+          <SymbolView
+            name={editingLook ? 'checkmark' : 'paintpalette'}
+            size={14}
+            tintColor={colors.muted}
+          />
+          <Text className="text-subhead text-muted">
+            {editingLook ? 'Done' : 'Edit icon & colour'}
+          </Text>
+        </Pressable>
+      )}
 
       <PickerModal
         visible={picker === 'date' && day !== null}
@@ -405,49 +445,6 @@ function Subtasks({ parent }: { parent: PlannerItem }) {
         </Text>
       </Pressable>
     </View>
-  );
-}
-
-type DraftInputProps = Omit<TextInputProps, 'value' | 'onChangeText' | 'onEndEditing'> & {
-  value: string;
-  /** Saves the text: when editing ends, and when the sheet closes mid-edit. */
-  onCommit: (text: string) => void;
-};
-
-/**
- * A text field that edits a local draft and writes it to the store when editing ends (not on
- * every keystroke, which would re-render every screen behind the sheet).
- */
-function DraftInput({ value, onCommit, ...rest }: DraftInputProps) {
-  const [text, setText] = useState(value);
-  // Typed but not yet saved; null when the store already has it.
-  const pending = useRef<string | null>(null);
-  const commit = useRef(onCommit);
-  useEffect(() => {
-    commit.current = onCommit;
-  });
-  const flush = () => {
-    if (pending.current !== null && pending.current !== value) commit.current(pending.current);
-    pending.current = null;
-  };
-  // The sheet can close while a field is still focused: save what was typed.
-  useEffect(
-    () => () => {
-      if (pending.current !== null) commit.current(pending.current);
-    },
-    [],
-  );
-
-  return (
-    <TextInput
-      value={text}
-      onChangeText={(t) => {
-        setText(t);
-        pending.current = t;
-      }}
-      onEndEditing={flush}
-      {...rest}
-    />
   );
 }
 

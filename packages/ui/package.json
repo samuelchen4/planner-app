@@ -26,6 +26,7 @@
     "nativewind": "^4.2.7",
     "react": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-svg": "15.16.0",
     "typescript": "~6.0.3"
   }
 }
