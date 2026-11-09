@@ -10,7 +10,11 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.samuelchen.planner",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "appleTeamId": "58PKV544UU",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -41,6 +45,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "935d3409-cc4f-48c5-a639-cf8345d26295"
+      }
+    },
+    "owner": "samuel.chen156"
   }
 }
