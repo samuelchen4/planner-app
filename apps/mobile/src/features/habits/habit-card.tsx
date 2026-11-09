@@ -1,4 +1,4 @@
-import type { PlannerItem } from '@planner/core';
+import type { Task } from '@/db/schema';
 import { cn } from '@planner/ui';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, Text, View } from 'react-native';
@@ -15,7 +15,7 @@ import { HabitBadge, useHabitLook } from './habit-look';
 const DOT = 32;
 
 interface Props {
-  habit: PlannerItem;
+  habit: Task;
   /** The days shown, oldest first, ending today. */
   days: Date[];
   today: Date;

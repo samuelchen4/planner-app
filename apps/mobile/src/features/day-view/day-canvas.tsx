@@ -1,4 +1,6 @@
-import { SCHEDULE_MAX_END, type DayEntry } from '@planner/core';
+import { SCHEDULE_MAX_END } from '@planner/core';
+
+import type { DayEntry } from '@/db/entries';
 import {
   useEffect,
   useImperativeHandle,

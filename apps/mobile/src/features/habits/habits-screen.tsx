@@ -1,14 +1,14 @@
-import type { PlannerItem } from '@planner/core';
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
 import { GestureScrollView } from '@/lib/gesture-scroll-view';
-import { usePlannerStore } from '@/lib/planner-store';
+import { toggleHabitDay } from '@/db/habits';
+import { useHabitDays, useTasks } from '@/db/tables';
 
 import { HabitCard } from './habit-card';
-import { doneByHabit, recentDays, streak, toggleHabitDay } from './habit-days';
+import { doneByHabit, recentDays, streak } from './habit-days';
 
 const NONE = new Set<string>();
 
@@ -19,18 +19,14 @@ const NONE = new Set<string>();
 export function HabitsScreen() {
   const tabBarSpace = useTabBarSpace();
   const tracker = useTabBarScrollTracker();
-  const { entries, habitDays, setHabitDays } = usePlannerStore();
+  const tasks = useTasks();
+  const habitDays = useHabitDays();
 
   const today = new Date();
   const days = recentDays(today);
   const habits = useMemo(
-    () =>
-      entries.flatMap((e): PlannerItem[] =>
-        e.kind === 'item' && e.item.type === 'habit' && e.item.status !== 'cancelled'
-          ? [e.item]
-          : [],
-      ),
-    [entries],
+    () => tasks.filter((t) => t.type === 'habit' && t.status !== 'cancelled'),
+    [tasks],
   );
   const byHabit = useMemo(() => doneByHabit(habitDays), [habitDays]);
 
@@ -58,9 +54,7 @@ export function HabitsScreen() {
             today={today}
             done={done}
             streak={streak(done, today)}
-            onToggleDay={(day) =>
-              setHabitDays((prev) => toggleHabitDay(prev, habit.id, habit.userId, day))
-            }
+            onToggleDay={(day) => toggleHabitDay(habit, day)}
           />
         );
       })}

@@ -1,4 +1,4 @@
-import type { PlannerItem } from '@planner/core';
+import type { Task } from '@/db/schema';
 import { cn } from '@planner/ui';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState } from 'react';
@@ -12,10 +12,10 @@ import { DraftInput } from '@/features/item-details/draft-input';
 import { DrawnRing, useDrawProgress } from '@/lib/drawn-ring';
 import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
 import { haptics } from '@/lib/haptics';
-import { usePlannerStore } from '@/lib/planner-store';
+import { setHabitDayNote, toggleHabitDay } from '@/db/habits';
+import { useHabitDays } from '@/db/tables';
 import { useColors } from '@/lib/theme';
 
-import { setHabitDayNote, toggleHabitDay } from './habit-days';
 import { useHabitLook } from './habit-look';
 
 const CELL = 40;
@@ -30,18 +30,18 @@ const WEEKDAYS = Array.from({ length: 7 }, (_, i) =>
  * its colour (double-tap a day to check it off or un-check it), and below it the selected day: done or not, and that
  * day's note. Notes are per day (what happened that day), not per habit.
  */
-export function HabitHistory({ habit }: { habit: PlannerItem }) {
-  const { habitDays, setHabitDays } = usePlannerStore();
+export function HabitHistory({ habit }: { habit: Task }) {
+  const habitDays = useHabitDays();
   const colors = useColors();
   const { edge } = useHabitLook(habit);
   const today = addDays(new Date(), 0);
   const [selected, setSelected] = useState(today);
 
-  const days = habitDays.filter((d) => d.habitId === habit.id);
-  const done = new Set(days.filter((d) => d.done).map((d) => d.date));
+  const days = habitDays.filter((d) => d.habit_id === habit.id);
+  const done = new Set(days.filter((d) => d.done_at).map((d) => d.date));
   const noted = new Set(days.filter((d) => d.note).map((d) => d.date));
   const row = days.find((d) => d.date === dateKey(selected));
-  const isDone = row?.done ?? false;
+  const isDone = !!row?.done_at;
 
   return (
     <>
@@ -51,7 +51,7 @@ export function HabitHistory({ habit }: { habit: PlannerItem }) {
         onSelect={setSelected}
         onToggle={(day) => {
           haptics.check();
-          setHabitDays((prev) => toggleHabitDay(prev, habit.id, habit.userId, day));
+          toggleHabitDay(habit, day);
         }}
         done={done}
         noted={noted}
@@ -64,7 +64,7 @@ export function HabitHistory({ habit }: { habit: PlannerItem }) {
           <Pressable
             onPress={() => {
               haptics.check();
-              setHabitDays((prev) => toggleHabitDay(prev, habit.id, habit.userId, selected));
+              toggleHabitDay(habit, selected);
             }}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: isDone }}
@@ -94,9 +94,7 @@ export function HabitHistory({ habit }: { habit: PlannerItem }) {
           // A fresh draft per day.
           key={dateKey(selected)}
           value={row?.note ?? ''}
-          onCommit={(note) =>
-            setHabitDays((prev) => setHabitDayNote(prev, habit.id, habit.userId, selected, note))
-          }
+          onCommit={(note) => setHabitDayNote(habit, selected, note)}
           placeholder="How did it go?"
           placeholderTextColor={colors.subtle}
           multiline

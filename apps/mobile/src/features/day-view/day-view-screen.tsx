@@ -2,11 +2,11 @@ import { useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { View } from 'react-native';
 
-import { usePlannerStore } from '@/lib/planner-store';
+import { useDayEntries } from '@/db/entries';
+import { moveTask, scheduleTask, toggleDone, unscheduleTask } from '@/db/tasks';
 
 import { DateHeader } from './date-header';
 import { DayCanvas, type DayCanvasHandle } from './day-canvas';
-import { moveItemTo, scheduleItem, toggleItemDone, unscheduleItem } from './day-entries';
 import { buildDayRange } from './day-range';
 import { DragGhost, type GhostTask } from './drag-ghost';
 import { useDragLayer } from './drag-layer';
@@ -19,7 +19,7 @@ import { useDragLayer } from './drag-layer';
 export function DayViewScreen() {
   const range = useMemo(() => buildDayRange(), []);
   const [selected, setSelected] = useState(range.todayKey);
-  const { entries, setEntries } = usePlannerStore();
+  const entries = useDayEntries();
   const [headerHeight, setHeaderHeight] = useState(0);
   const canvasRef = useRef<DayCanvasHandle>(null);
 
@@ -55,16 +55,10 @@ export function DayViewScreen() {
         headerHeight={headerHeight}
         onVisibleDayChange={setSelected}
         onDraggingChange={setDragging}
-        onToggleDone={(id) => setEntries((prev) => toggleItemDone(prev, id))}
-        onScheduleItem={(id, day, startMin, durationMin) =>
-          setEntries((prev) => scheduleItem(prev, id, day, startMin, durationMin))
-        }
-        onMoveItemTo={(id, day, startMin) =>
-          setEntries((prev) => moveItemTo(prev, id, day, startMin))
-        }
-        onUnscheduleItem={(id, day, beforeId) =>
-          setEntries((prev) => unscheduleItem(prev, id, day, beforeId))
-        }
+        onToggleDone={toggleDone}
+        onScheduleItem={scheduleTask}
+        onMoveItemTo={moveTask}
+        onUnscheduleItem={unscheduleTask}
         dragLayer={dragLayer}
         onDragTaskChange={setDragTask}
       />

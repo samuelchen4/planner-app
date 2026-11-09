@@ -1,4 +1,4 @@
-import type { ListColor, PlannerItem } from '@planner/core';
+import type { Task, TaskColor } from '@/db/schema';
 import { noteColors } from '@planner/ui';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { Pressable, Text, View } from 'react-native';
@@ -36,13 +36,13 @@ const ICON_ROWS = Array.from({ length: Math.ceil(HABIT_ICONS.length / 5) }, (_, 
 );
 
 /** Colours a habit can pick: the sticky-note palette (no green, it's reserved for done). */
-export const HABIT_COLORS: ListColor[] = ['yellow', 'orange', 'pink', 'lavender', 'blue'];
+export const HABIT_COLORS: TaskColor[] = ['yellow', 'orange', 'pink', 'lavender', 'blue'];
 
 const DEFAULT_ICON: SFSymbol = 'star.fill';
-const DEFAULT_COLOR: ListColor = 'blue';
+const DEFAULT_COLOR: TaskColor = 'blue';
 
 /** A habit's colours (paper fill, edge for border and accents), defaults filled in. */
-export function useHabitLook(habit: PlannerItem) {
+export function useHabitLook(habit: Task) {
   const scheme = useScheme();
   const color = habit.color ?? DEFAULT_COLOR;
   return {
@@ -53,7 +53,7 @@ export function useHabitLook(habit: PlannerItem) {
 }
 
 /** The habit's logo: its icon in white on a rounded square of its colour. */
-export function HabitBadge({ habit, size = 34 }: { habit: PlannerItem; size?: number }) {
+export function HabitBadge({ habit, size = 34 }: { habit: Task; size?: number }) {
   const colors = useColors();
   const { icon, edge } = useHabitLook(habit);
   return (
@@ -75,13 +75,13 @@ export function HabitLookPicker({
   habit,
   onChange,
 }: {
-  habit: PlannerItem;
-  onChange: (patch: Pick<PlannerItem, 'color' | 'icon'>) => void;
+  habit: Task;
+  onChange: (patch: Partial<Pick<Task, 'color' | 'icon'>>) => void;
 }) {
   const colors = useColors();
   const scheme = useScheme();
   const look = useHabitLook(habit);
-  const pick = (patch: Pick<PlannerItem, 'color' | 'icon'>) => {
+  const pick = (patch: Partial<Pick<Task, 'color' | 'icon'>>) => {
     haptics.tick();
     onChange(patch);
   };

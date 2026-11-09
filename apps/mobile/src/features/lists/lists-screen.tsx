@@ -1,10 +1,8 @@
-import type { PlannerItem } from '@planner/core';
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
-import { toggleItemDone } from '@/features/day-view/day-entries';
 import {
   dateKey,
   formatTime,
@@ -13,41 +11,41 @@ import {
   relativeDayName,
 } from '@/features/day-view/time';
 import { GestureScrollView } from '@/lib/gesture-scroll-view';
-import { usePlannerStore } from '@/lib/planner-store';
+import type { Task } from '@/db/schema';
+import { useTasks } from '@/db/tables';
+import { toggleDone } from '@/db/tasks';
 
 import { ListCard } from './list-card';
 
 /** When a list is on the planner: 'Today', 'Tomorrow, 2:00 PM', 'Mon, Nov 16' (null: no date). */
-function whenLabel(list: PlannerItem): string | null {
-  const key = list.startAt ? dateKey(new Date(list.startAt)) : list.allDayDate;
+function whenLabel(list: Task): string | null {
+  const key = list.start_at ? dateKey(new Date(list.start_at)) : list.all_day_date;
   if (!key) return null;
   const name = relativeDayName(parseDateKey(key));
-  return list.startAt ? `${name}, ${formatTime(minutesOfDay(list.startAt))}` : name;
+  return list.start_at ? `${name}, ${formatTime(minutesOfDay(list.start_at))}` : name;
 }
 
 /**
- * Lists: every list (a planner item of type 'list') with its entries. Shares the planner store with
- * the Today screen, so a dated list ticked here is ticked there too.
+ * Lists: every list (a task of type 'list') with its entries. The same tasks as the Today screen,
+ * so a dated list ticked here is ticked there too.
  */
 export function ListsScreen() {
   const tabBarSpace = useTabBarSpace();
   const tracker = useTabBarScrollTracker();
-  const { entries, setEntries } = usePlannerStore();
+  const tasks = useTasks();
 
   const { lists, entriesByList } = useMemo(() => {
-    const lists: PlannerItem[] = [];
-    const entriesByList = new Map<string, PlannerItem[]>();
-    for (const e of entries) {
-      if (e.kind !== 'item' || e.item.status === 'cancelled') continue;
-      const { item } = e;
-      if (item.type === 'list') lists.push(item);
-      else if (item.listId) {
-        entriesByList.set(item.listId, [...(entriesByList.get(item.listId) ?? []), item]);
+    const lists: Task[] = [];
+    const entriesByList = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (task.status === 'cancelled') continue;
+      if (task.type === 'list') lists.push(task);
+      else if (task.list_id) {
+        entriesByList.set(task.list_id, [...(entriesByList.get(task.list_id) ?? []), task]);
       }
     }
     return { lists, entriesByList };
-  }, [entries]);
-  const toggle = (id: string) => setEntries((prev) => toggleItemDone(prev, id));
+  }, [tasks]);
 
   return (
     <GestureScrollView
@@ -69,8 +67,8 @@ export function ListsScreen() {
           list={list}
           items={entriesByList.get(list.id) ?? []}
           when={whenLabel(list)}
-          onToggleList={toggle}
-          onToggleItem={toggle}
+          onToggleList={toggleDone}
+          onToggleItem={toggleDone}
         />
       ))}
     </GestureScrollView>

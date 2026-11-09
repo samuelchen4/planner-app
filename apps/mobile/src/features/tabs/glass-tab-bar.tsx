@@ -7,10 +7,9 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { createItem, newItemId, type NewItemKind } from '@/features/item-details/item-edits';
+import { createTask, type NewTaskKind } from '@/db/tasks';
 import { haptics } from '@/lib/haptics';
 import { openItem } from '@/lib/open-item';
-import { usePlannerStore } from '@/lib/planner-store';
 import { TABS } from '@/lib/tabs';
 import { useColors } from '@/lib/theme';
 
@@ -28,7 +27,7 @@ const RESIZE_SPRING = { damping: 20, stiffness: 260, mass: 0.6 };
 const ADD_SLOT = 2;
 const ADD_SIZE = 46;
 /** What the add button makes on each page. */
-const ADD_KIND: Record<string, NewItemKind> = { index: 'task', habits: 'habit', lists: 'list' };
+const ADD_KIND: Record<string, NewTaskKind> = { index: 'task', habits: 'habit', lists: 'list' };
 const slotOf = (tab: number) => (tab < ADD_SLOT ? tab : tab + 1);
 
 /** Distance from the bar's bottom edge to the bottom of the screen. */
@@ -54,14 +53,10 @@ export function GlassTabBar({ state, position, navigateToTab }: MaterialTopTabBa
   const count = state.routes.length;
   // onLayout width includes the row's padding; the add button takes a slot too.
   const itemWidth = (rowWidth - BAR_PAD * 2) / (count + 1);
-  const { setEntries } = usePlannerStore();
   const addKind = ADD_KIND[state.routes[state.index]?.name] ?? 'task';
   const add = () => {
     haptics.lift();
-    const id = newItemId();
-    // 'me' until auth exists: the signed-in user's id goes here.
-    setEntries((prev) => createItem(prev, addKind, id, 'me', new Date()));
-    openItem(id, { isNew: true });
+    openItem(createTask(addKind, new Date()), { isNew: true });
   };
 
   // Shrinks while scrolling down (see useTabBarScrollTracker), anchored at its bottom edge.

@@ -1,4 +1,3 @@
-import type { PlannerItem } from '@planner/core';
 import { cn, noteColors } from '@planner/ui';
 import { SymbolView } from 'expo-symbols';
 import { StyleSheet, Text, View } from 'react-native';
@@ -6,6 +5,7 @@ import { GestureDetector, useExclusiveGestures, useTapGesture } from 'react-nati
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ANYTIME_ROW_GAP, ANYTIME_ROW_H, AnytimeRowBody } from '@/features/day-view/anytime-list';
+import type { Task } from '@/db/schema';
 import { Checkbox } from '@/features/day-view/checkbox';
 import { NoteIcon } from '@/features/day-view/list-icon';
 import { GestureScrollView } from '@/lib/gesture-scroll-view';
@@ -70,7 +70,7 @@ function useRowGestures(onToggle: () => void, onOpen?: () => void) {
   return { checkTap, rowGesture };
 }
 
-function ListItemRow({ item, onToggle }: { item: PlannerItem; onToggle: () => void }) {
+function ListItemRow({ item, onToggle }: { item: Task; onToggle: () => void }) {
   const { checkTap, rowGesture } = useRowGestures(onToggle);
   const done = item.status === 'done';
   return (
@@ -102,9 +102,9 @@ function ListItemRow({ item, onToggle }: { item: PlannerItem; onToggle: () => vo
 }
 
 interface Props {
-  /** The list (a planner item of type 'list'). */
-  list: PlannerItem;
-  items: PlannerItem[];
+  /** The list (a task of type 'list'). */
+  list: Task;
+  items: Task[];
   /** When it's on the planner ('Today', 'Tomorrow, 2:00 PM'); null when it has no date. */
   when: string | null;
   onToggleList: (id: string) => void;

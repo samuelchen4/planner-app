@@ -4,7 +4,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { PlannerStoreProvider } from '@/lib/planner-store';
+import { DatabaseProvider } from '@/db/provider';
 import { SettingsProvider } from '@/lib/settings';
 import { useColors, useScheme, useThemeStyle } from '@/lib/theme';
 
@@ -21,7 +21,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SettingsProvider>
-        <PlannerStoreProvider>
+        <DatabaseProvider>
           <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
             <View style={[{ flex: 1 }, themeStyle]}>
               <Stack
@@ -46,7 +46,7 @@ export default function RootLayout() {
               </Stack>
             </View>
           </ThemeProvider>
-        </PlannerStoreProvider>
+        </DatabaseProvider>
       </SettingsProvider>
     </GestureHandlerRootView>
   );

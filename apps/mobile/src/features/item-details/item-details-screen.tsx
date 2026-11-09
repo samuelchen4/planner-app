@@ -1,4 +1,3 @@
-import type { PlannerItem } from '@planner/core';
 import { cn } from '@planner/ui';
 import { useLocalSearchParams } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
@@ -27,21 +26,23 @@ import {
 import { haptics } from '@/lib/haptics';
 import { HabitHistory } from '@/features/habits/habit-history';
 import { HabitBadge, HabitLookPicker } from '@/features/habits/habit-look';
-import { usePlannerStore } from '@/lib/planner-store';
+import { useDayEntries } from '@/db/entries';
+import type { Task } from '@/db/schema';
+import { taskTable } from '@/db/tables';
+import {
+  clearTaskTime,
+  deleteIfUntitled,
+  entriesOf,
+  newEntry,
+  saveEntries,
+  setTaskDate,
+  setTaskTime,
+  taskDay,
+  taskTimes,
+  updateTask,
+} from '@/db/tasks';
 import { useColors, useThemeStyle } from '@/lib/theme';
 
-import {
-  clearItemTime,
-  discardIfUntitled,
-  itemDayKey,
-  itemTimes,
-  newSubtask,
-  setItemDate,
-  setItemTime,
-  subtasksOf,
-  syncSubtasks,
-  updateItem,
-} from './item-edits';
 import { DraftInput } from './draft-input';
 import { CalendarPicker, TimeWheel } from './pickers';
 
@@ -56,7 +57,7 @@ import { CalendarPicker, TimeWheel } from './pickers';
  */
 export function ItemDetailsScreen() {
   const { id, new: isNew } = useLocalSearchParams<{ id: string; new?: string }>();
-  const { entries } = usePlannerStore();
+  const entries = useDayEntries();
   const entry = entries.find((e) => (e.kind === 'item' ? e.item.id : e.event.id) === id);
 
   return (
@@ -76,11 +77,13 @@ export function ItemDetailsScreen() {
         <EventDetails
           title={entry.event.title}
           dayKey={
-            entry.event.startAt ? dateKey(new Date(entry.event.startAt)) : entry.event.allDayStart
+            entry.event.start_at
+              ? dateKey(new Date(entry.event.start_at))
+              : entry.event.all_day_start
           }
           time={
-            entry.event.startAt && entry.event.endAt
-              ? `${formatTime(minutesOfIso(entry.event.startAt))} – ${formatTime(minutesOfIso(entry.event.endAt))}`
+            entry.event.start_at && entry.event.end_at
+              ? `${formatTime(minutesOfIso(entry.event.start_at))} – ${formatTime(minutesOfIso(entry.event.end_at))}`
               : 'All day'
           }
         />
@@ -111,8 +114,7 @@ function atMinutes(day: Date, minutes: number): Date {
 
 type Picker = 'date' | 'time' | null;
 
-function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
-  const { setEntries } = usePlannerStore();
+function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
   const colors = useColors();
   const [picker, setPicker] = useState<Picker>(null);
   const [edge, setEdge] = useState<'start' | 'end'>('start');
@@ -127,13 +129,13 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
     return () => clearTimeout(t);
   }, [isNew]);
   const [editingLook, setEditingLook] = useState(false);
-  const key = itemDayKey(item);
+  const key = taskDay(item);
   const day = key ? parseDateKey(key) : null;
-  const times = itemTimes(item);
+  const times = taskTimes(item);
 
   const openDate = () => {
     // Turning the date on starts at today, like Reminders; the calendar then changes it.
-    if (!day) setEntries((prev) => setItemDate(prev, item.id, new Date()));
+    if (!day) setTaskDate(item.id, new Date());
     setPicker('date');
   };
   const openTime = () => {
@@ -142,7 +144,7 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
       const now = new Date();
       const isToday = !day || dateKey(day) === dateKey(now);
       const start = isToday ? Math.min((now.getHours() + 1) * 60, 23 * 60) : 9 * 60;
-      setEntries((prev) => setItemTime(prev, item.id, start, start + 60));
+      setTaskTime(item.id, start, start + 60);
     }
     setEdge('start');
     setPicker('time');
@@ -150,12 +152,10 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
   const onTime = (d: Date) => {
     if (!times) return;
     const min = d.getHours() * 60 + d.getMinutes();
-    setEntries((prev) =>
-      edge === 'start'
-        ? // Moving the start keeps the duration.
-          setItemTime(prev, item.id, min, min + (times.end - times.start))
-        : setItemTime(prev, item.id, times.start, min),
-    );
+    if (edge === 'start') {
+      // Moving the start keeps the duration.
+      setTaskTime(item.id, min, min + (times.end - times.start));
+    } else setTaskTime(item.id, times.start, min);
   };
 
   return (
@@ -166,13 +166,11 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
           {isHabit && <HabitBadge habit={item} />}
           <DraftInput
             value={item.title}
-            onCommit={(title) => setEntries((prev) => updateItem(prev, item.id, { title }))}
+            onCommit={(title) => updateTask(item.id, { title })}
             // Made by the add button: type its name straight away (focused above); closing without
             // one discards it.
             ref={titleRef}
-            onUnmount={
-              isNew ? () => setEntries((prev) => discardIfUntitled(prev, item.id)) : undefined
-            }
+            onUnmount={isNew ? () => deleteIfUntitled(item.id) : undefined}
             placeholder={
               item.type === 'habit' ? 'New habit' : item.type === 'list' ? 'New list' : 'New task'
             }
@@ -197,7 +195,7 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
             value={dayLabel(key)}
             active={picker === 'date'}
             onPress={openDate}
-            onClear={day ? () => setEntries((prev) => setItemDate(prev, item.id, null)) : undefined}
+            onClear={day ? () => setTaskDate(item.id, null) : undefined}
           />
           <Separator />
           <FieldRow
@@ -212,7 +210,7 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
             }
             active={picker === 'time'}
             onPress={openTime}
-            onClear={times ? () => setEntries((prev) => clearItemTime(prev, item.id)) : undefined}
+            onClear={times ? () => clearTaskTime(item.id) : undefined}
           />
         </View>
       )}
@@ -220,10 +218,7 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
       {/* A habit's look (colour and icon) is set up separately from its content: Edit swaps the
           history for the picker. */}
       {isHabit && editingLook ? (
-        <HabitLookPicker
-          habit={item}
-          onChange={(patch) => setEntries((prev) => updateItem(prev, item.id, patch))}
-        />
+        <HabitLookPicker habit={item} onChange={(patch) => updateTask(item.id, patch)} />
       ) : isHabit ? (
         // Habits: a calendar of done days and a note per day (instead of one note for the habit).
         <HabitHistory habit={item} />
@@ -231,9 +226,7 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
         <View className="bg-card rounded-card px-4 py-3">
           <DraftInput
             value={item.notes ?? ''}
-            onCommit={(notes) =>
-              setEntries((prev) => updateItem(prev, item.id, { notes: notes || undefined }))
-            }
+            onCommit={(notes) => updateTask(item.id, { notes: notes || null })}
             placeholder="Notes"
             placeholderTextColor={colors.subtle}
             multiline
@@ -270,12 +263,7 @@ function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
         title="Date"
         onClose={() => setPicker(null)}
       >
-        {day && (
-          <CalendarPicker
-            value={day}
-            onChange={(d) => setEntries((prev) => setItemDate(prev, item.id, d))}
-          />
-        )}
+        {day && <CalendarPicker value={day} onChange={(d) => setTaskDate(item.id, d)} />}
       </PickerModal>
 
       <PickerModal
@@ -369,13 +357,12 @@ function PickerModal({
 /**
  * The item's subtasks as quiet rows (no fill, hairline dividers, muted text, check on the right),
  * each a plain text field. They're edited locally while the sheet is open (adding or typing doesn't
- * re-render the screens behind it) and written to the store when it closes; empty ones are
+ * re-render the screens behind it) and saved when it closes; empty ones are
  * dropped then. Return adds the next one; tapping the check toggles it.
  */
-function Subtasks({ parent }: { parent: PlannerItem }) {
-  const { entries, setEntries } = usePlannerStore();
+function Subtasks({ parent }: { parent: Task }) {
   const colors = useColors();
-  const [rows, setRows] = useState(() => subtasksOf(entries, parent.id));
+  const [rows, setRows] = useState(() => entriesOf(taskTable.all(), parent.id));
   // A newly added row focuses itself when it mounts.
   const [newId, setNewId] = useState<string | null>(null);
 
@@ -384,27 +371,24 @@ function Subtasks({ parent }: { parent: PlannerItem }) {
     latest.current = rows;
   });
   const parentId = parent.id;
-  useEffect(
-    () => () => setEntries((prev) => syncSubtasks(prev, parentId, latest.current)),
-    [parentId, setEntries],
-  );
+  useEffect(() => () => saveEntries(parentId, latest.current), [parentId]);
 
   const add = (afterId: string | null) => {
-    const sub = newSubtask(parent);
+    const sub = newEntry(parent);
     setRows((rs) => {
       const at = afterId ? rs.findIndex((r) => r.id === afterId) : -1;
       return at < 0 ? [...rs, sub] : [...rs.slice(0, at + 1), sub, ...rs.slice(at + 1)];
     });
     setNewId(sub.id);
   };
-  const edit = (id: string, patch: Partial<PlannerItem>) =>
+  const edit = (id: string, patch: Partial<Task>) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const toggle = (sub: PlannerItem) => {
+  const toggle = (sub: Task) => {
     haptics.check();
     const done = sub.status !== 'done';
     edit(sub.id, {
       status: done ? 'done' : 'open',
-      completedAt: done ? toLocalIso(new Date()) : undefined,
+      completed_at: done ? toLocalIso(new Date()) : null,
     });
   };
 
@@ -541,7 +525,7 @@ function EventDetails({
   time,
 }: {
   title: string;
-  dayKey: string | undefined;
+  dayKey: string | null;
   time: string;
 }) {
   return (
