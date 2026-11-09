@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native';
 
 import { ANYTIME_ROW_H } from '@/features/day-view/anytime-list';
@@ -31,6 +32,7 @@ import { useColors, useThemeStyle } from '@/lib/theme';
 
 import {
   clearItemTime,
+  discardIfUntitled,
   itemDayKey,
   itemTimes,
   newSubtask,
@@ -53,7 +55,7 @@ import { CalendarPicker, TimeWheel } from './pickers';
  * reflows) and notes. Google events show read-only.
  */
 export function ItemDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, new: isNew } = useLocalSearchParams<{ id: string; new?: string }>();
   const { entries } = usePlannerStore();
   const entry = entries.find((e) => (e.kind === 'item' ? e.item.id : e.event.id) === id);
 
@@ -69,7 +71,7 @@ export function ItemDetailsScreen() {
       {!entry ? (
         <Text className="font-rounded text-title2 text-muted font-bold">Not found</Text>
       ) : entry.kind === 'item' ? (
-        <ItemDetails item={entry.item} />
+        <ItemDetails item={entry.item} isNew={isNew === '1'} />
       ) : (
         <EventDetails
           title={entry.event.title}
@@ -109,13 +111,21 @@ function atMinutes(day: Date, minutes: number): Date {
 
 type Picker = 'date' | 'time' | null;
 
-function ItemDetails({ item }: { item: PlannerItem }) {
+function ItemDetails({ item, isNew }: { item: PlannerItem; isNew: boolean }) {
   const { setEntries } = usePlannerStore();
   const colors = useColors();
   const [picker, setPicker] = useState<Picker>(null);
   const [edge, setEdge] = useState<'start' | 'end'>('start');
 
   const isHabit = item.type === 'habit';
+  const titleRef = useRef<TextInputInstance>(null);
+  // A new item: put the cursor in the title once the sheet is up (autoFocus didn't always take
+  // when the sheet opened again).
+  useEffect(() => {
+    if (!isNew) return;
+    const t = setTimeout(() => titleRef.current?.focus(), 80);
+    return () => clearTimeout(t);
+  }, [isNew]);
   const [editingLook, setEditingLook] = useState(false);
   const key = itemDayKey(item);
   const day = key ? parseDateKey(key) : null;
@@ -157,7 +167,15 @@ function ItemDetails({ item }: { item: PlannerItem }) {
           <DraftInput
             value={item.title}
             onCommit={(title) => setEntries((prev) => updateItem(prev, item.id, { title }))}
-            placeholder="Title"
+            // Made by the add button: type its name straight away (focused above); closing without
+            // one discards it.
+            ref={titleRef}
+            onUnmount={
+              isNew ? () => setEntries((prev) => discardIfUntitled(prev, item.id)) : undefined
+            }
+            placeholder={
+              item.type === 'habit' ? 'New habit' : item.type === 'list' ? 'New list' : 'New task'
+            }
             placeholderTextColor={colors.subtle}
             multiline
             scrollEnabled={false}

@@ -25,6 +25,42 @@ export function findItem(entries: DayEntry[], id: string): PlannerItem | null {
   return e?.kind === 'item' ? e.item : null;
 }
 
+/** What the add button makes, by page. */
+export type NewItemKind = 'task' | 'list' | 'habit';
+
+/**
+ * A new, untitled item (the details sheet opens on it to name it): a task is an all-day task on
+ * `day`; a list is undated (it lives on the Lists page until it gets a date); a habit is daily.
+ */
+export function createItem(
+  entries: DayEntry[],
+  kind: NewItemKind,
+  id: string,
+  userId: string,
+  day: Date,
+): DayEntry[] {
+  const stamp = now();
+  const item: PlannerItem = {
+    id,
+    userId,
+    type: kind,
+    title: '',
+    status: 'open',
+    createdAt: stamp,
+    updatedAt: stamp,
+    ...(kind === 'task' && { allDayDate: dateKey(day) }),
+    ...(kind === 'list' && { color: 'yellow' as const }),
+    ...(kind === 'habit' && { color: 'blue' as const, icon: 'star.fill' }),
+  };
+  return [...entries, { kind: 'item', item }];
+}
+
+/** Drop the item if it still has no title (a new item whose sheet was closed without naming it). */
+export function discardIfUntitled(entries: DayEntry[], id: string): DayEntry[] {
+  const item = findItem(entries, id);
+  return item && !item.title.trim() ? removeItem(entries, id) : entries;
+}
+
 /** Change some fields of one planner item. */
 export function updateItem(
   entries: DayEntry[],
