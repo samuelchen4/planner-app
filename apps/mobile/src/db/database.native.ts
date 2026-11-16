@@ -1,20 +1,14 @@
-// Watched queries (used once the backend syncs) need async iterators.
 import '@azure/core-asynciterator-polyfill';
 
 import { OPSqliteOpenFactory } from '@powersync/op-sqlite';
 import { PowerSyncDatabase, type Transaction } from '@powersync/react-native';
 
+import { connector } from './connector';
 import type { TableWriter } from './local-table';
 import { AppSchema } from './powersync-schema';
 import type { HabitDay, Task } from './schema';
 import type { StoredRows } from './tables';
 
-// The phone's database (PowerSync, SQLite file planner.db). Local only for now. Every write is
-// already queued by PowerSync for upload, so once the backend exists, `db.connect(connector)`
-// starts syncing. At that point, also watch the tables (db.watch) and reload the in-memory copies
-// when another device changes them.
-// The SQLite engine underneath is op-sqlite (PowerSync's recommended one), via its adapter;
-// without the factory PowerSync falls back to looking for react-native-quick-sqlite.
 const db = new PowerSyncDatabase({
   schema: AppSchema,
   database: new OPSqliteOpenFactory({ dbFilename: 'planner.db' }),
@@ -24,41 +18,80 @@ const DATA_VERSION = 2;
 
 const migrations: Record<number, (tx: Transaction) => Promise<void>> = {};
 
-const SET_VERSION = "INSERT OR REPLACE INTO local_meta (id, value) VALUES ('data_version', ?)";
+type Statement = [sql: string, params: unknown[]];
+
+const value = (v: unknown) => (v === undefined ? null : v);
+
+function insertStatement(table: string, row: object): Statement {
+  const cols = Object.keys(row);
+  return [
+    `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+    cols.map((c) => value(row[c as keyof typeof row])),
+  ];
+}
+
+async function getMeta(key: string): Promise<string | null> {
+  const row = await db.getOptional<{ value: string }>('SELECT value FROM local_meta WHERE id = ?', [
+    key,
+  ]);
+  return row?.value ?? null;
+}
+
+const SET_META = 'INSERT OR REPLACE INTO local_meta (id, value) VALUES (?, ?)';
 
 async function migrate(from: number) {
   for (let version = from + 1; version <= DATA_VERSION; version++) {
     const step = migrations[version];
     await db.writeTransaction(async (tx) => {
       if (step) await step(tx);
-      await tx.execute(SET_VERSION, [String(version)]);
+      await tx.execute(SET_META, ['data_version', String(version)]);
     });
   }
 }
 
-export async function openDatabase(seed: () => StoredRows): Promise<StoredRows> {
+const readRows = async (): Promise<StoredRows> => ({
+  tasks: await db.getAll<Task>('SELECT * FROM tasks'),
+  habitDays: await db.getAll<HabitDay>('SELECT * FROM habit_days'),
+});
+
+export async function openDatabase(userId: string): Promise<StoredRows> {
   await db.init();
-  const stored = await db.getOptional<{ value: string }>(
-    "SELECT value FROM local_meta WHERE id = 'data_version'",
-  );
-  if (stored) {
-    await migrate(Number(stored.value));
-  } else {
-    const { tasks, habitDays } = seed();
-    for (const row of tasks) writer.insert('tasks', row);
-    for (const row of habitDays) writer.insert('habit_days', row);
-    await flush();
-    await db.execute(SET_VERSION, [String(DATA_VERSION)]);
+  const version = await getMeta('data_version');
+  if (version) await migrate(Number(version));
+  else await db.execute(SET_META, ['data_version', String(DATA_VERSION)]);
+
+  if ((await getMeta('owner')) !== userId) {
+    await db.disconnectAndClear();
+    await db.execute(SET_META, ['data_version', String(DATA_VERSION)]);
+    await db.execute(SET_META, ['owner', userId]);
   }
-  return {
-    tasks: await db.getAll<Task>('SELECT * FROM tasks'),
-    habitDays: await db.getAll<HabitDay>('SELECT * FROM habit_days'),
-  };
+
+  db.connect(connector).catch((e) => console.warn('[sync] Connecting failed:', e));
+  return readRows();
 }
 
-type Statement = [sql: string, params: unknown[]];
+export function watchRemoteChanges(onRows: (rows: StoredRows) => void): () => void {
+  const reload = async () => {
+    await flush();
+    if (pending.length) return;
+    const rows = await readRows();
+    if (!pending.length) onRows(rows);
+  };
+  return db.onChange(
+    { onChange: () => void reload() },
+    { tables: ['tasks', 'habit_days'], throttleMs: 100 },
+  );
+}
 
-/** Statements waiting to be written. Everything changed in one go is saved in one transaction. */
+export async function pendingUploads(): Promise<number> {
+  return (await db.getUploadQueueStats()).count;
+}
+
+export async function closeDatabase() {
+  await flush();
+  await db.disconnectAndClear();
+}
+
 let pending: Statement[] = [];
 let saving: Promise<void> = Promise.resolve();
 
@@ -81,16 +114,9 @@ function flush(): Promise<void> {
   return saving;
 }
 
-/** SQLite has no undefined: missing values are NULL. */
-const value = (v: unknown) => (v === undefined ? null : v);
-
 export const writer: TableWriter = {
   insert(table, row) {
-    const cols = Object.keys(row);
-    queue([
-      `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
-      cols.map((c) => value(row[c as keyof typeof row])),
-    ]);
+    queue(insertStatement(table, row));
   },
   update(table, id, patch) {
     const cols = Object.keys(patch).filter((c) => c !== 'id');

@@ -10,6 +10,7 @@ import {
 } from '@/features/day-view/time';
 
 import { newId } from './ids';
+import { ownerId } from './owner';
 import type { Task } from './schema';
 import { habitDayTable, taskTable } from './tables';
 
@@ -17,8 +18,6 @@ import { habitDayTable, taskTable } from './tables';
 // at once) and the change is saved to the phone's database in the background.
 
 const now = () => toLocalIso(new Date());
-/** Until auth exists, every row belongs to this user. */
-const USER_ID = 'me';
 
 // ─── Reading ─────────────────────────────────────────────────────────────────────────────────
 
@@ -70,7 +69,7 @@ function blankTask(fields: Partial<Task>): Task {
   const stamp = now();
   return {
     id: newId(),
-    user_id: USER_ID,
+    user_id: ownerId(),
     type: 'task',
     title: '',
     notes: null,

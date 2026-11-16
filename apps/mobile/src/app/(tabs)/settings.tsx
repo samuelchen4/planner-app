@@ -1,7 +1,5 @@
-import { PlaceholderScreen } from '@/features/tabs/placeholder-screen';
+import { SettingsScreen } from '@/features/settings/settings-screen';
 
-export default function SettingsScreen() {
-  return (
-    <PlaceholderScreen title="Settings" body="Connected calendars and account settings go here." />
-  );
+export default function Settings() {
+  return <SettingsScreen />;
 }

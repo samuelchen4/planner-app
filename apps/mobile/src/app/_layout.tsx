@@ -4,7 +4,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { DatabaseProvider } from '@/db/provider';
+import { AuthGate } from '@/auth/auth-gate';
 import { SettingsProvider } from '@/lib/settings';
 import { useColors, useScheme, useThemeStyle } from '@/lib/theme';
 
@@ -21,9 +21,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SettingsProvider>
-        <DatabaseProvider>
-          <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <View style={[{ flex: 1 }, themeStyle]}>
+        <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <View style={[{ flex: 1 }, themeStyle]}>
+            <AuthGate>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -44,9 +44,9 @@ export default function RootLayout() {
                   }}
                 />
               </Stack>
-            </View>
-          </ThemeProvider>
-        </DatabaseProvider>
+            </AuthGate>
+          </View>
+        </ThemeProvider>
       </SettingsProvider>
     </GestureHandlerRootView>
   );

@@ -30,6 +30,24 @@ export class LocalTable<Row extends { id: string }> {
     this.changed();
   }
 
+  replace(rows: Row[]) {
+    let changed = rows.length !== this.rows.size;
+    const next = new Map<string, Row>();
+    for (const row of rows) {
+      const current = this.rows.get(row.id);
+      const same =
+        current &&
+        Object.keys(row).every(
+          (k) => (current[k as keyof Row] ?? null) === (row[k as keyof Row] ?? null),
+        );
+      next.set(row.id, same ? current : row);
+      if (!same) changed = true;
+    }
+    if (!changed) return;
+    this.rows = next;
+    this.changed();
+  }
+
   /** Every row, in order. The same array until something changes. */
   all = (): Row[] => this.sorted;
 

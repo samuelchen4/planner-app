@@ -2,11 +2,16 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { loadTables } from './tables';
 
-/** Opens the database and loads the tables before showing the app (nothing renders until then). */
-export function DatabaseProvider({ children }: { children: ReactNode }) {
+export function DatabaseProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    void loadTables().then(() => setReady(true));
-  }, []);
+    let active = true;
+    void loadTables(userId).then(() => {
+      if (active) setReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
   return ready ? children : null;
 }
