@@ -1,7 +1,11 @@
 import '@azure/core-asynciterator-polyfill';
 
 import { OPSqliteOpenFactory } from '@powersync/op-sqlite';
-import { PowerSyncDatabase, type Transaction } from '@powersync/react-native';
+import {
+  PowerSyncDatabase,
+  SyncStreamConnectionMethod,
+  type Transaction,
+} from '@powersync/react-native';
 
 import { connector } from './connector';
 import type { TableWriter } from './local-table';
@@ -12,6 +16,25 @@ import type { StoredRows } from './tables';
 const db = new PowerSyncDatabase({
   schema: AppSchema,
   database: new OPSqliteOpenFactory({ dbFilename: 'planner.db' }),
+});
+
+db.registerListener({
+  statusChanged: (s) => {
+    const downloadError = s.dataFlowStatus.downloadError;
+    const uploadError = s.dataFlowStatus.uploadError;
+    if (downloadError) {
+      const e = downloadError as Error;
+      console.warn('[sync] Download error:', e.message, JSON.stringify(e.stack ?? 'no stack'));
+    }
+    if (uploadError) {
+      console.warn('[sync] Upload error:', uploadError.message, '\n', uploadError.stack);
+    }
+    if (__DEV__) {
+      console.log(
+        `[sync] connected=${s.connected} connecting=${s.connecting} downloading=${s.dataFlowStatus.downloading} hasSynced=${s.hasSynced}`,
+      );
+    }
+  },
 });
 
 const DATA_VERSION = 2;
@@ -66,7 +89,9 @@ export async function openDatabase(userId: string): Promise<StoredRows> {
     await db.execute(SET_META, ['owner', userId]);
   }
 
-  db.connect(connector).catch((e) => console.warn('[sync] Connecting failed:', e));
+  db.connect(connector, { connectionMethod: SyncStreamConnectionMethod.HTTP }).catch((e) =>
+    console.warn('[sync] Connecting failed:', e),
+  );
   return readRows();
 }
 

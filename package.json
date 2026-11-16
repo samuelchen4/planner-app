@@ -34,6 +34,9 @@
       "allowedVersions": {
         "@powersync/op-sqlite>@op-engineering/op-sqlite": "19"
       }
+    },
+    "patchedDependencies": {
+      "@powersync/op-sqlite@0.9.17": "patches/@powersync__op-sqlite@0.9.17.patch"
     }
   }
 }

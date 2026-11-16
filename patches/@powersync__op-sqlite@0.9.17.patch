@@ -1,0 +1,42 @@
+diff --git a/lib/commonjs/db/OPSQLiteConnection.js b/lib/commonjs/db/OPSQLiteConnection.js
+index 88a799dd1fecc942fafe7a1a352d1915b6dce429..8ae3a7c48e666db646a09c1d74b78c4d59c05e0d 100644
+--- a/lib/commonjs/db/OPSQLiteConnection.js
++++ b/lib/commonjs/db/OPSQLiteConnection.js
+@@ -73,7 +73,8 @@ class OPSQLiteExecutor extends _common.BaseObserver {
+     };
+   }
+   async executeRaw(query, params) {
+-    return await this.DB.executeRaw(query, params);
++    const result = await this.DB.executeRaw(query, params);
++    return Array.isArray(result) ? result : result?.rawRows ?? [];
+   }
+   async executeNativeBatch(query, params = []) {
+     const tuple = [[query, params[0]]];
+diff --git a/lib/module/db/OPSQLiteConnection.js b/lib/module/db/OPSQLiteConnection.js
+index bf531cd0f1b9aea02d7768cb2a4505da2f225075..2ab4276a129a71ba3d79d89546e35a97619c3cb0 100644
+--- a/lib/module/db/OPSQLiteConnection.js
++++ b/lib/module/db/OPSQLiteConnection.js
+@@ -69,7 +69,8 @@ class OPSQLiteExecutor extends BaseObserver {
+     };
+   }
+   async executeRaw(query, params) {
+-    return await this.DB.executeRaw(query, params);
++    const result = await this.DB.executeRaw(query, params);
++    return Array.isArray(result) ? result : result?.rawRows ?? [];
+   }
+   async executeNativeBatch(query, params = []) {
+     const tuple = [[query, params[0]]];
+diff --git a/src/db/OPSQLiteConnection.ts b/src/db/OPSQLiteConnection.ts
+index 80c249aeeb886866079845f84ecacea8f2fc0b24..11d0ec15f3a864e3013226dfd9059a9e86c4ab41 100644
+--- a/src/db/OPSQLiteConnection.ts
++++ b/src/db/OPSQLiteConnection.ts
+@@ -102,7 +102,8 @@ class OPSQLiteExecutor extends BaseObserver<DBAdapterListener> implements Omit<S
+   }
+ 
+   async executeRaw(query: string, params?: any[]): Promise<any[][]> {
+-    return await this.DB.executeRaw(query, params);
++    const result: any = await this.DB.executeRaw(query, params);
++    return Array.isArray(result) ? result : (result?.rawRows ?? []);
+   }
+ 
+   async executeNativeBatch(query: string, params: any[][] = []): Promise<QueryResult> {

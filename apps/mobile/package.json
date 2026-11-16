@@ -1,7 +1,7 @@
 {
   "name": "@planner/mobile",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "dependencies": {
     "@azure/core-asynciterator-polyfill": "^1.0.2",
     "@expo/ui": "~58.0.28",
