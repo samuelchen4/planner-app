@@ -5,5 +5,5 @@ export const config = {
   powerSyncUrl:
     process.env.EXPO_PUBLIC_POWERSYNC_URL ??
     'https://6af7ca52e5558a7422b9db59.powersync.journeyapps.com',
-  apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
+  apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'https://planner-api-dev-qwgcby2x5a-uk.a.run.app',
 };
