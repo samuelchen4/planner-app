@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
+import { EmptyCard } from '@/features/day-view/anytime-list';
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
 import { GestureScrollView } from '@/lib/gesture-scroll-view';
@@ -44,6 +45,7 @@ export function HabitsScreen() {
       onMomentumScrollEnd={() => tracker.onEnd()}
     >
       <Text className="font-rounded text-large-title text-ink mb-1 font-bold">Habits</Text>
+      {habits.length === 0 && <EmptyCard label="No habits yet. Tap + to add one." height={64} />}
       {habits.map((habit) => {
         const done = byHabit.get(habit.id) ?? NONE;
         return (

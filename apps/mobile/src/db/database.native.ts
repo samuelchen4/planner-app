@@ -2,7 +2,7 @@
 import '@azure/core-asynciterator-polyfill';
 
 import { OPSqliteOpenFactory } from '@powersync/op-sqlite';
-import { PowerSyncDatabase } from '@powersync/react-native';
+import { PowerSyncDatabase, type Transaction } from '@powersync/react-native';
 
 import type { TableWriter } from './local-table';
 import { AppSchema } from './powersync-schema';
@@ -20,34 +20,35 @@ const db = new PowerSyncDatabase({
   database: new OPSqliteOpenFactory({ dbFilename: 'planner.db' }),
 });
 
-/**
- * Bump when the local tables change shape in a way old data can't follow (before the backend
- * exists, that's easier than migrating): the device's data is cleared and the samples go back in.
- */
-const LOCAL_DATA_VERSION = '2';
+const DATA_VERSION = 2;
 
-/**
- * Open the database and read every row. On the very first launch (or a new LOCAL_DATA_VERSION),
- * `seed` (sample data) is written first; a device-only flag records that, so deleting everything
- * later doesn't bring it back.
- */
+const migrations: Record<number, (tx: Transaction) => Promise<void>> = {};
+
+const SET_VERSION = "INSERT OR REPLACE INTO local_meta (id, value) VALUES ('data_version', ?)";
+
+async function migrate(from: number) {
+  for (let version = from + 1; version <= DATA_VERSION; version++) {
+    const step = migrations[version];
+    await db.writeTransaction(async (tx) => {
+      if (step) await step(tx);
+      await tx.execute(SET_VERSION, [String(version)]);
+    });
+  }
+}
+
 export async function openDatabase(seed: () => StoredRows): Promise<StoredRows> {
   await db.init();
-  const version = await db.getOptional<{ value: string }>(
-    'SELECT value FROM local_meta WHERE id = ?',
-    ['data_version'],
+  const stored = await db.getOptional<{ value: string }>(
+    "SELECT value FROM local_meta WHERE id = 'data_version'",
   );
-  if (version?.value !== LOCAL_DATA_VERSION) {
-    // Old or no data: start over (also empties the upload queue).
-    await db.disconnectAndClear();
+  if (stored) {
+    await migrate(Number(stored.value));
+  } else {
     const { tasks, habitDays } = seed();
     for (const row of tasks) writer.insert('tasks', row);
     for (const row of habitDays) writer.insert('habit_days', row);
     await flush();
-    await db.execute('INSERT OR REPLACE INTO local_meta (id, value) VALUES (?, ?)', [
-      'data_version',
-      LOCAL_DATA_VERSION,
-    ]);
+    await db.execute(SET_VERSION, [String(DATA_VERSION)]);
   }
   return {
     tasks: await db.getAll<Task>('SELECT * FROM tasks'),

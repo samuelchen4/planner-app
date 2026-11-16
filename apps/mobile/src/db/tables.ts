@@ -21,17 +21,15 @@ export const habitDayTable = new LocalTable<HabitDay>('habit_days', writer, (a, 
   a.date.localeCompare(b.date),
 );
 
-/**
- * Open the database and fill the tables (sample data on first launch). Call once at startup. If
- * the database can't open, the app still runs on the sample data (unsaved).
- */
+const startingRows = (): StoredRows => (__DEV__ ? sampleRows() : { tasks: [], habitDays: [] });
+
 export async function loadTables() {
   let rows: StoredRows;
   try {
-    rows = await openDatabase(sampleRows);
+    rows = await openDatabase(startingRows);
   } catch (e) {
-    console.warn('[db] Opening the database failed, using unsaved sample data:', e);
-    rows = sampleRows();
+    console.warn('[db] Opening the database failed, running unsaved:', e);
+    rows = startingRows();
   }
   taskTable.load(rows.tasks);
   habitDayTable.load(rows.habitDays);

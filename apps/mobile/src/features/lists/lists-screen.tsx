@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
+import { EmptyCard } from '@/features/day-view/anytime-list';
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
 import {
@@ -61,6 +62,7 @@ export function ListsScreen() {
       onMomentumScrollEnd={() => tracker.onEnd()}
     >
       <Text className="font-rounded text-large-title text-ink font-bold">Lists</Text>
+      {lists.length === 0 && <EmptyCard label="No lists yet. Tap + to add one." height={64} />}
       {lists.map((list) => (
         <ListCard
           key={list.id}

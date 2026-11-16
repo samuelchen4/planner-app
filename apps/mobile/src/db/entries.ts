@@ -7,8 +7,10 @@ import { useTasks } from './tables';
 /** What the day view and the details sheet show: a task, or a mirrored calendar event. */
 export type DayEntry = { kind: 'item'; item: Task } | { kind: 'external'; event: ExternalEvent };
 
-/** Sample Google events, until the backend's calendar sync fills the external_events table. */
-const events = sampleEvents().map((event): DayEntry => ({ kind: 'external', event }));
+const events = (__DEV__ ? sampleEvents() : []).map((event): DayEntry => ({
+  kind: 'external',
+  event,
+}));
 
 /** Every task and calendar event, as day entries (tasks in order). */
 export function useDayEntries(): DayEntry[] {
