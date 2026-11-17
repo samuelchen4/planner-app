@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Alert,
   Keyboard,
   Modal,
   Pressable,
@@ -32,6 +33,7 @@ import { taskTable } from '@/db/tables';
 import {
   clearTaskTime,
   deleteIfUntitled,
+  deleteTask,
   entriesOf,
   newEntry,
   saveEntries,
@@ -114,6 +116,13 @@ function atMinutes(day: Date, minutes: number): Date {
 
 type Picker = 'date' | 'time' | null;
 
+const KIND_NAME: Record<Task['type'], string> = {
+  task: 'Task',
+  time_block: 'Block',
+  list: 'List',
+  habit: 'Habit',
+};
+
 function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
   const colors = useColors();
   const [picker, setPicker] = useState<Picker>(null);
@@ -149,6 +158,39 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
     setEdge('start');
     setPicker('time');
   };
+  // Deleting closes the sheet first; the row goes once the sheet is gone (deleting it while the
+  // sheet is still sliding away would flash "Not found").
+  const deleteOnClose = useRef(false);
+  useEffect(
+    () => () => {
+      if (deleteOnClose.current) deleteTask(item.id);
+    },
+    [item.id],
+  );
+  const confirmDelete = () => {
+    const kind = KIND_NAME[item.type];
+    const entryCount = entriesOf(taskTable.all(), item.id).length;
+    const extra =
+      item.type === 'habit'
+        ? 'Its history will be deleted too.'
+        : entryCount
+          ? `Its ${entryCount} ${entryCount === 1 ? 'item' : 'items'} will be deleted too.`
+          : undefined;
+    Alert.alert(`Delete ${kind}?`, extra, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          haptics.tick();
+          deleteOnClose.current = true;
+          if (router.canGoBack()) router.back();
+          else deleteTask(item.id);
+        },
+      },
+    ]);
+  };
+
   const onTime = (d: Date) => {
     if (!times) return;
     const min = d.getHours() * 60 + d.getMinutes();
@@ -266,6 +308,14 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
           </Text>
         </Pressable>
       )}
+
+      <Pressable
+        onPress={confirmDelete}
+        accessibilityRole="button"
+        className="bg-card rounded-card min-h-11 items-center justify-center py-3 active:opacity-60"
+      >
+        <Text className="text-body text-danger">Delete {KIND_NAME[item.type]}</Text>
+      </Pressable>
 
       <PickerModal
         visible={picker === 'date' && day !== null}
