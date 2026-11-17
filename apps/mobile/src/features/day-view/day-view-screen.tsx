@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { useDayEntries } from '@/db/entries';
 import { moveTask, scheduleTask, toggleDone, unscheduleTask } from '@/db/tasks';
+import { useTodayKey } from '@/lib/today';
 
 import { DateHeader } from './date-header';
 import { DayCanvas, type DayCanvasHandle } from './day-canvas';
@@ -15,8 +16,16 @@ import { useDragLayer } from './drag-layer';
  * The day view: a sticky date header floating over an infinite canvas of days.
  * The two stay in sync: scrolling the canvas into a day selects it in the header, and picking a
  * date in the header jumps the canvas there.
+ *
+ * Rebuilt from scratch when the date changes (past midnight, or reopened on a later day), so it
+ * always opens on today.
  */
 export function DayViewScreen() {
+  const todayKey = useTodayKey();
+  return <DayView key={todayKey} />;
+}
+
+function DayView() {
   const range = useMemo(() => buildDayRange(), []);
   const [selected, setSelected] = useState(range.todayKey);
   const entries = useDayEntries();

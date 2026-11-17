@@ -67,7 +67,6 @@ import { GrowIn, MORPH_MS, ShrinkOut } from './morph';
 import type { GhostTask } from './drag-ghost';
 import type { DragLayer, DragSource, TaskDragHandlers } from './drag-layer';
 import { EDGE_HANDLE_H } from './edge-handle';
-import { minutesOfDay } from './time';
 import type { DropPreview } from './timeline-block';
 import {
   GRID_PAD_Y,
@@ -286,18 +285,24 @@ export function DayCanvas({
     });
   };
 
-  const scrollToNow = () => {
-    const visible = viewportHeight - headerHeight;
-    const now = minutesOfDay(new Date().toISOString());
+  // While pinned, today stays at the top even as days above it change height (rows arriving from
+  // sync after launch). Touching the canvas or picking another day unpins it.
+  const pinnedToToday = useRef(true);
+
+  /** Put today's section (its date label) right under the header. */
+  const scrollToToday = () => {
+    pinnedToToday.current = true;
     visibleRef.current = range.todayIndex;
-    showAtTop(timeY(range.todayIndex, now) - visible / 3);
+    onVisibleDayChange(range.todayKey);
+    showAtTop(starts[range.todayIndex]);
   };
 
   useImperativeHandle(ref, () => ({
     scrollToDay: (key) => {
       const target = range.indexOf.get(key);
       if (target === undefined) return;
-      if (target === range.todayIndex) return scrollToNow();
+      if (target === range.todayIndex) return scrollToToday();
+      pinnedToToday.current = false;
       // Keep the same time of day at the top. Days have different windows, so go via minutes.
       const current = visibleRef.current;
       const into = offsetRef.current + headerHeight - gridTop(current);
@@ -308,13 +313,19 @@ export function DayCanvas({
     },
   }));
 
-  // Open at the current time, once the header and viewport have been measured.
+  // Open on today, once the header and viewport have been measured.
   const didInit = useRef(false);
   useEffect(() => {
     if (didInit.current || headerHeight === 0 || viewportHeight === 0) return;
     didInit.current = true;
-    scrollToNow();
+    scrollToToday();
   });
+
+  // Day heights changed (e.g. synced rows came in) while pinned: keep today at the top.
+  useLayoutEffect(() => {
+    if (didInit.current && pinnedToToday.current) scrollToToday();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the layout changes
+  }, [starts]);
 
   // A released edge drag. (The grid already scrolled the list in step with it, so committing the
   // new window needs no scroll correction.)
@@ -829,6 +840,9 @@ export function DayCanvas({
         ListHeaderComponent={<View style={{ height: spacer }} />}
         ListFooterComponent={<View style={{ height: FOOTER_H + tabBarSpace }} />}
         onLayout={(e) => setViewportHeight(e.nativeEvent.layout.height)}
+        onTouchStart={() => {
+          pinnedToToday.current = false;
+        }}
         onScroll={onScroll}
         scrollEventThrottle={16}
         renderItem={({ item, index }) => (

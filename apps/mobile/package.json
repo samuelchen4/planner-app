@@ -61,15 +61,16 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "APP_VARIANT=local expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "device:add": "EXPO_APPLE_TEAM_ID=58PKV544UU npx eas-cli@latest device:create",
-    "build:ios:dev": "EXPO_APPLE_TEAM_ID=58PKV544UU npx eas-cli@latest build --profile development --platform ios",
+    "build:ios:local": "APP_VARIANT=local EXPO_APPLE_TEAM_ID=58PKV544UU npx eas-cli@latest build --profile local --platform ios",
     "build:ios:preview": "EXPO_APPLE_TEAM_ID=58PKV544UU npx eas-cli@latest build --profile preview --platform ios",
+    "build:ios:dev": "APP_VARIANT=dev EXPO_APPLE_TEAM_ID=58PKV544UU npx eas-cli@latest build --profile dev --platform ios --auto-submit",
     "build:ios:prod": "EXPO_APPLE_TEAM_ID=58PKV544UU npx eas-cli@latest build --profile production --platform ios"
   },
   "private": true
