@@ -10,7 +10,7 @@ App Review applies only to public App Store releases and external TestFlight tes
 | Stage | How | Review? | Notes |
 |---|---|---|---|
 | 1. Expo Go | Install the Expo Go app, scan the QR code from `npx expo start` | No | Fastest start. Can't run custom native code (PowerSync's local database, App Intents, widgets), so we outgrow it quickly. |
-| 2. Development build (daily driver) | `eas build --profile development`, install once, then live-reload JS from the Mac | No | Includes our native modules. Rebuild only when native code or dependencies change. |
+| 2. Development build (daily driver) | `pnpm build:ios:local` ("Planner - Local"), install once, then live-reload JS from the Mac | No | Includes our native modules. Rebuild only when native code or dependencies change. |
 | 3. Internal distribution | `eas build --profile preview` produces an install link | No | For friends and testers. Register each device first with `eas device:create`. Limited to about 100 iPhones per year. |
 | 4. TestFlight, internal testers | `eas submit` uploads to App Store Connect, testers install through the TestFlight app | No | Closest to the real release. Up to 100 testers (App Store Connect team members). |
 | 5. TestFlight, external testers | Invite up to 10,000 testers by email or public link | Light beta review | Builds expire after 90 days. |

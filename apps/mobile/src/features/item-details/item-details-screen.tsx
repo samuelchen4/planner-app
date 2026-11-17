@@ -1,5 +1,5 @@
 import { cn } from '@planner/ui';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -171,6 +171,15 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
             // one discards it.
             ref={titleRef}
             onUnmount={isNew ? () => deleteIfUntitled(item.id) : undefined}
+            // Naming a new item and hitting Done creates it: the sheet closes (the title is saved
+            // as the field unmounts). With no name, it just dismisses the keyboard.
+            onSubmitEditing={
+              isNew
+                ? (e) => {
+                    if (e.nativeEvent.text.trim() && router.canGoBack()) router.back();
+                  }
+                : undefined
+            }
             placeholder={
               item.type === 'habit' ? 'New habit' : item.type === 'list' ? 'New list' : 'New task'
             }
