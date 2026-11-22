@@ -7,7 +7,7 @@ export const EVENT_STATUSES = ['confirmed', 'tentative', 'cancelled'] as const;
 
 /**
  * Events mirrored from the user's other calendars (Google for now), read-only in the app. Only
- * the backend's calendar sync worker writes these. See notes/google-calendar-integration.md.
+ * the backend's calendar sync worker writes these. See notes/calendar-integrations.md.
  */
 export const externalEvents = pgTable(
   'external_events',
