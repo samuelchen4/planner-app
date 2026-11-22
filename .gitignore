@@ -32,3 +32,7 @@ credentials.json
 # Personal AI-assistant notes and settings (local only)
 CLAUDE.md
 .claude/settings.local.json
+
+# Planning notes and AI-agent instructions: local only, not on GitHub
+AGENTS.md
+/notes/

@@ -1,10 +1,14 @@
-import { Card } from '@planner/ui';
-import { Alert, Pressable, ScrollView, Text } from 'react-native';
+import { Card, cn } from '@planner/ui';
+import { router } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { signOut, useSession } from '@/auth/session';
 import { pendingUploads } from '@/db/database';
+import { useCalendarAccounts } from '@/db/tables';
 import { useTabBarSpace } from '@/features/tabs/glass-tab-bar';
 import { useTabBarScrollTracker } from '@/features/tabs/tab-bar-scroll';
+import { useColors } from '@/lib/theme';
 
 async function confirmSignOut() {
   const unsynced = await pendingUploads();
@@ -41,6 +45,7 @@ export function SettingsScreen() {
         <Text className="text-footnote text-muted">Signed in with Apple</Text>
         {email && <Text className="text-body text-ink">{email}</Text>}
       </Card>
+      <CalendarsRow />
       {session && (
         <Pressable
           accessibilityRole="button"
@@ -51,5 +56,38 @@ export function SettingsScreen() {
         </Pressable>
       )}
     </ScrollView>
+  );
+}
+
+/** Opens Settings → Calendars; its value sums up what's connected. */
+function CalendarsRow() {
+  const colors = useColors();
+  const accounts = useCalendarAccounts();
+  const needsReconnect = accounts.some((a) => a.status !== 'active');
+  const summary = needsReconnect
+    ? 'Needs reconnecting'
+    : accounts.length === 0
+      ? 'Not connected'
+      : accounts.length === 1
+        ? accounts[0].email
+        : `${accounts.length} accounts`;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Calendars: ${summary}`}
+      onPress={() => router.push('/calendars')}
+      className="bg-card rounded-card min-h-12 flex-row items-center gap-3 px-4 py-3 active:opacity-60"
+    >
+      <SymbolView name="calendar" size={18} tintColor={colors.accent} />
+      <Text className="text-body text-ink">Calendars</Text>
+      <View className="flex-1" />
+      <Text
+        numberOfLines={1}
+        className={cn('text-body shrink', needsReconnect ? 'text-warning' : 'text-muted')}
+      >
+        {summary}
+      </Text>
+      <SymbolView name="chevron.right" size={13} weight="semibold" tintColor={colors.subtle} />
+    </Pressable>
   );
 }

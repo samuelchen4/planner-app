@@ -10,7 +10,7 @@ import {
 import { connector } from './connector';
 import type { TableWriter } from './local-table';
 import { AppSchema } from './powersync-schema';
-import type { HabitDay, Task } from './schema';
+import { fromSqlite, toSqlite } from './sqlite-values';
 import type { StoredRows } from './tables';
 
 const db = new PowerSyncDatabase({
@@ -43,7 +43,7 @@ const migrations: Record<number, (tx: Transaction) => Promise<void>> = {};
 
 type Statement = [sql: string, params: unknown[]];
 
-const value = (v: unknown) => (v === undefined ? null : v);
+const value = toSqlite;
 
 function insertStatement(table: string, row: object): Statement {
   const cols = Object.keys(row);
@@ -72,10 +72,31 @@ async function migrate(from: number) {
   }
 }
 
-const readRows = async (): Promise<StoredRows> => ({
-  tasks: await db.getAll<Task>('SELECT * FROM tasks'),
-  habitDays: await db.getAll<HabitDay>('SELECT * FROM habit_days'),
-});
+/** Where each kept table's rows come from (the SQLite table name). */
+const SOURCES = {
+  tasks: 'tasks',
+  habitDays: 'habit_days',
+  calendarAccounts: 'calendar_accounts',
+  calendars: 'calendars',
+  externalEvents: 'external_events',
+} as const satisfies Record<keyof StoredRows, string>;
+
+type RowsKey = keyof StoredRows;
+const TABLE_KEYS = Object.keys(SOURCES) as RowsKey[];
+
+async function readTable<K extends RowsKey>(key: K): Promise<StoredRows[K]> {
+  const table = SOURCES[key];
+  const rows = await db.getAll<StoredRows[K][number]>(`SELECT * FROM ${table}`);
+  return rows.map((r) => fromSqlite(table, r)) as StoredRows[K];
+}
+
+async function readRows(keys: RowsKey[] = TABLE_KEYS): Promise<Partial<StoredRows>> {
+  const out: Partial<StoredRows> = {};
+  for (const key of keys) (out as Record<RowsKey, unknown>)[key] = await readTable(key);
+  return out;
+}
+
+const readAllRows = async (): Promise<StoredRows> => readRows() as Promise<StoredRows>;
 
 export async function openDatabase(userId: string): Promise<StoredRows> {
   await db.init();
@@ -92,19 +113,43 @@ export async function openDatabase(userId: string): Promise<StoredRows> {
   db.connect(connector, { connectionMethod: SyncStreamConnectionMethod.HTTP }).catch((e) =>
     console.warn('[sync] Connecting failed:', e),
   );
-  return readRows();
+  return readAllRows();
 }
 
-export function watchRemoteChanges(onRows: (rows: StoredRows) => void): () => void {
+/** SQLite table name (as PowerSync reports it: 'ps_data__tasks' …) → kept table key. */
+const keyOfTable = (name: string): RowsKey | undefined => {
+  const table = name.replace(/^ps_data(_local)?__/, '');
+  return TABLE_KEYS.find((k) => SOURCES[k] === table);
+};
+
+/**
+ * Calls `onRows` with the tables that changed (synced or local writes), re-read once local writes
+ * have flushed. Unknown change sets re-read everything.
+ */
+export function watchRemoteChanges(onRows: (rows: Partial<StoredRows>) => void): () => void {
+  const changed = new Set<RowsKey>();
   const reload = async () => {
     await flush();
-    if (pending.length) return;
-    const rows = await readRows();
-    if (!pending.length) onRows(rows);
+    if (pending.length || !changed.size) return;
+    const keys = [...changed];
+    changed.clear();
+    const rows = await readRows(keys);
+    if (pending.length) {
+      // A local write came in meanwhile: read these again after it.
+      for (const k of keys) changed.add(k);
+      return;
+    }
+    onRows(rows);
   };
   return db.onChange(
-    { onChange: () => void reload() },
-    { tables: ['tasks', 'habit_days'], throttleMs: 100 },
+    {
+      onChange: (event) => {
+        const keys = event.changedTables.map(keyOfTable).filter((k) => k !== undefined);
+        for (const k of keys.length ? keys : TABLE_KEYS) changed.add(k);
+        void reload();
+      },
+    },
+    { tables: Object.values(SOURCES), throttleMs: 100 },
   );
 }
 

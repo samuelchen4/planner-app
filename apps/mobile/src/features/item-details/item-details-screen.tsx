@@ -1,10 +1,9 @@
 import { cn } from '@planner/ui';
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView, type SFSymbol } from 'expo-symbols';
+import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
-  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -17,17 +16,11 @@ import {
 
 import { ANYTIME_ROW_H } from '@/features/day-view/anytime-list';
 import { Checkbox } from '@/features/day-view/checkbox';
-import {
-  dateKey,
-  formatTime,
-  parseDateKey,
-  relativeDayName,
-  toLocalIso,
-} from '@/features/day-view/time';
+import { dateKey, formatTime, parseDateKey, toLocalIso } from '@/features/day-view/time';
 import { haptics } from '@/lib/haptics';
 import { HabitHistory } from '@/features/habits/habit-history';
 import { HabitBadge, HabitLookPicker } from '@/features/habits/habit-look';
-import { useDayEntries } from '@/db/entries';
+import { entryId, useDayEntries } from '@/db/entries';
 import type { Task } from '@/db/schema';
 import { taskTable } from '@/db/tables';
 import {
@@ -46,6 +39,8 @@ import {
 import { useColors, useThemeStyle } from '@/lib/theme';
 
 import { DraftInput } from './draft-input';
+import { dayLabel, FieldRow, Separator } from './fields';
+import { EventDetails } from './event-details';
 import { CalendarPicker, TimeWheel } from './pickers';
 
 /**
@@ -60,7 +55,7 @@ import { CalendarPicker, TimeWheel } from './pickers';
 export function ItemDetailsScreen() {
   const { id, new: isNew } = useLocalSearchParams<{ id: string; new?: string }>();
   const entries = useDayEntries();
-  const entry = entries.find((e) => (e.kind === 'item' ? e.item.id : e.event.id) === id);
+  const entry = entries.find((e) => entryId(e) === id);
 
   return (
     <ScrollView
@@ -76,37 +71,10 @@ export function ItemDetailsScreen() {
       ) : entry.kind === 'item' ? (
         <ItemDetails item={entry.item} isNew={isNew === '1'} />
       ) : (
-        <EventDetails
-          title={entry.event.title}
-          dayKey={
-            entry.event.start_at
-              ? dateKey(new Date(entry.event.start_at))
-              : entry.event.all_day_start
-          }
-          time={
-            entry.event.start_at && entry.event.end_at
-              ? `${formatTime(minutesOfIso(entry.event.start_at))} – ${formatTime(minutesOfIso(entry.event.end_at))}`
-              : 'All day'
-          }
-        />
+        <EventDetails entry={entry} />
       )}
     </ScrollView>
   );
-}
-
-const minutesOfIso = (iso: string) => {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-};
-
-/** 'Today, Nov 8' / 'Tue, Nov 10' / 'None'. */
-function dayLabel(key: string | null | undefined): string {
-  if (!key) return 'None';
-  const day = parseDateKey(key);
-  const name = relativeDayName(day);
-  return name.includes(',')
-    ? name
-    : `${name}, ${day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
 
 /** Local midnight + minutes, as a Date (what the time pickers take). */
@@ -506,96 +474,5 @@ function Subtasks({ parent }: { parent: Task }) {
         </Text>
       </Pressable>
     </View>
-  );
-}
-
-/** One row of the body card: icon, label, value; tap to open its picker, ⓧ to clear. */
-function FieldRow({
-  icon,
-  label,
-  value,
-  active,
-  onPress,
-  onClear,
-}: {
-  icon: SFSymbol;
-  label: string;
-  value: string;
-  active?: boolean;
-  onPress?: () => void;
-  onClear?: () => void;
-}) {
-  const colors = useColors();
-  return (
-    <View className="min-h-12 flex-row items-center pr-4">
-      <Pressable
-        onPress={() => {
-          // The picker modal opens over the sheet; don't leave the keyboard covering it.
-          Keyboard.dismiss();
-          onPress?.();
-        }}
-        disabled={!onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${value}`}
-        className="min-h-12 flex-1 flex-row items-center gap-3 pl-4 active:opacity-60"
-      >
-        <SymbolView name={icon} size={18} tintColor={colors.accent} />
-        <Text className="text-body text-ink flex-1">{label}</Text>
-        <Text
-          className={cn('text-body', active ? 'text-accent' : 'text-muted')}
-          style={{ fontVariant: ['tabular-nums'] }}
-        >
-          {value}
-        </Text>
-      </Pressable>
-      {onClear && (
-        // A sibling, not inside the row's button (a nested button is invalid on web).
-        <Pressable
-          onPress={onClear}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={`Remove ${label.toLowerCase()}`}
-          className="ml-2 active:opacity-60"
-        >
-          <SymbolView name="xmark.circle.fill" size={17} tintColor={colors.subtle} />
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function Separator() {
-  const colors = useColors();
-  return (
-    <View
-      style={{
-        height: StyleSheet.hairlineWidth,
-        backgroundColor: colors.border,
-        marginLeft: 46,
-      }}
-    />
-  );
-}
-
-/** A Google Calendar event: read-only (it's edited in Google). */
-function EventDetails({
-  title,
-  dayKey,
-  time,
-}: {
-  title: string;
-  dayKey: string | null;
-  time: string;
-}) {
-  return (
-    <>
-      <Text className="font-rounded text-title2 text-ink font-bold">{title}</Text>
-      <View className="bg-card rounded-card overflow-hidden">
-        <FieldRow icon="calendar" label="Date" value={dayLabel(dayKey)} />
-        <Separator />
-        <FieldRow icon="clock" label="Time" value={time} />
-      </View>
-      <Text className="text-footnote text-subtle px-1">From Google Calendar · read-only</Text>
-    </>
   );
 }

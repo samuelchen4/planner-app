@@ -22,3 +22,13 @@ export function NoteIcon() {
     </View>
   );
 }
+
+/** The subtle mark next to a calendar event's title (it's mirrored from another calendar). */
+export function CalendarIcon() {
+  const colors = useColors();
+  return (
+    <View className="ml-1.5" accessibilityLabel="Calendar event">
+      <SymbolView name="calendar" size={11} weight="semibold" tintColor={colors.muted} />
+    </View>
+  );
+}

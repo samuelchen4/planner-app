@@ -9,9 +9,10 @@ import { SettingsProvider } from '@/lib/settings';
 import { useColors, useScheme, useThemeStyle } from '@/lib/theme';
 
 /**
- * Root: providers, then a stack with the tab pager underneath and the item details sheet
- * (`item/[id]`) presented over it. The sheet is a native iOS form sheet: it slides up from the
- * bottom over the current screen and swipes down to close.
+ * Root: providers, then a stack with the tab pager underneath, the item details sheet
+ * (`item/[id]`) presented over it, and Settings' Calendars screen pushed onto it. The sheet is a
+ * native iOS form sheet: it slides up from the bottom over the current screen and swipes down to
+ * close.
  */
 export default function RootLayout() {
   const scheme = useScheme();
@@ -42,6 +43,23 @@ export default function RootLayout() {
                     sheetCornerRadius: 24,
                     contentStyle: { backgroundColor: colors.app },
                   }}
+                />
+                <Stack.Screen
+                  name="calendars"
+                  options={{
+                    headerShown: true,
+                    title: 'Calendars',
+                    headerBackTitle: 'Settings',
+                    headerTintColor: colors.accent,
+                    headerShadowVisible: false,
+                    headerStyle: { backgroundColor: colors.app },
+                    headerTitleStyle: { color: colors.ink },
+                  }}
+                />
+                {/* The connect flow's return link: a blank, instant stop that goes straight back. */}
+                <Stack.Screen
+                  name="integrations/[result]"
+                  options={{ animation: 'none', presentation: 'transparentModal' }}
                 />
               </Stack>
             </AuthGate>

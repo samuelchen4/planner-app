@@ -1,17 +1,9 @@
-import {
-  SCHEDULE_MAX_END,
-  SCHEDULE_MIN_SPAN,
-  SCHEDULE_MIN_START,
-} from '@planner/core';
+import { SCHEDULE_MAX_END, SCHEDULE_MIN_SPAN, SCHEDULE_MIN_START } from '@planner/core';
 
 import type { DayEntry } from '@/db/entries';
 
-import {
-  dateKey,
-  DEFAULT_DURATION_MIN,
-  MINUTES_PER_DAY,
-  minutesOfDay,
-} from './time';
+import { placeEvent } from './event-days';
+import { dateKey, DEFAULT_DURATION_MIN, formatTime, MINUTES_PER_DAY, minutesOfDay } from './time';
 import { MIN_BLOCK_MIN, type TimeWindow, type TimelineEntry } from './timeline-constants';
 
 export interface AnytimeTask {
@@ -23,55 +15,106 @@ export interface AnytimeTask {
   hasNotes: boolean;
 }
 
+/** A calendar event in a day's all-day area (read-only: no check, can't be dragged). */
+export interface AllDayEvent {
+  id: string;
+  title: string;
+  /** Its calendar's colour (hex), or null for the neutral grey. */
+  color: string | null;
+}
+
+/** '9:30 AM – 10:00 AM' for an event's own start and end (local time). */
+function eventTimeLabel(startAt: string, endAt: string | null): string {
+  const start = formatTime(minutesOfDay(startAt));
+  return endAt ? `${start} – ${formatTime(minutesOfDay(endAt))}` : start;
+}
+
 /**
  * Entries grouped by local day ('YYYY-MM-DD'): timed ones for the grids, untimed planner tasks for
  * each day's Anytime list. An untimed task sits on its `all_day_date`; one with no date at all is in
  * the inbox, which shows as today's Anytime list. Lists are tasks too, but an undated list stays on
  * the Lists page (it isn't in the inbox); list entries never show here (they live in their list).
+ * Calendar events (see placeEvent): timed ones on every day they touch, split at midnight; all-day
+ * (and day-long) ones in `allDayEventsByDay`, on every day they cover.
  */
 export function bucketEntries(entries: DayEntry[], todayKey: string) {
   const timedByDay = new Map<string, TimelineEntry[]>();
   const anytimeByDay = new Map<string, AnytimeTask[]>();
+  const allDayEventsByDay = new Map<string, AllDayEvent[]>();
+  const push = <T>(map: Map<string, T[]>, key: string, value: T) => {
+    const list = map.get(key);
+    if (list) list.push(value);
+    else map.set(key, [value]);
+  };
 
   for (const e of entries) {
-    const isItem = e.kind === 'item';
-    const { id, title, start_at: startAt, end_at: endAt, status } = isItem ? e.item : e.event;
-    if (status === 'cancelled') continue;
-    if (isItem && e.item.list_id) continue;
-    // Habits live on the Habits tab only.
-    if (isItem && e.item.type === 'habit') continue;
-    const isList = isItem && e.item.type === 'list';
-    const hasNotes = isItem && !!e.item.notes?.trim();
-    if (!startAt) {
-      if (isItem) {
-        if (isList && !e.item.all_day_date) continue;
-        const key = e.item.all_day_date ?? todayKey;
-        const list = anytimeByDay.get(key) ?? [];
-        list.push({ id, title, done: status === 'done', isList, hasNotes });
-        anytimeByDay.set(key, list);
+    if (e.kind === 'external') {
+      const { event } = e;
+      if (event.status === 'cancelled') continue;
+      const color = e.calendar?.color ?? null;
+      const title = event.title.trim() || '(No title)';
+      const placement = placeEvent(event);
+      if (placement.kind === 'allDay') {
+        for (const day of placement.days) {
+          push(allDayEventsByDay, day, { id: event.id, title, color });
+        }
+      } else if (placement.kind === 'timed' && event.start_at) {
+        const timeLabel = eventTimeLabel(event.start_at, event.end_at);
+        for (const seg of placement.segments) {
+          push(timedByDay, seg.day, {
+            id: event.id,
+            title,
+            startMin: seg.startMin,
+            endMin: seg.endMin,
+            draggable: false,
+            tone: 'calendar',
+            checkable: false,
+            done: false,
+            isList: false,
+            hasNotes: false,
+            color,
+            timeLabel,
+          });
+        }
       }
+      continue;
+    }
+    const { item } = e;
+    const { id, title, start_at: startAt, end_at: endAt, status } = item;
+    if (status === 'cancelled') continue;
+    if (item.list_id) continue;
+    // Habits live on the Habits tab only.
+    if (item.type === 'habit') continue;
+    const isList = item.type === 'list';
+    const hasNotes = !!item.notes?.trim();
+    if (!startAt) {
+      if (isList && !item.all_day_date) continue;
+      push(anytimeByDay, item.all_day_date ?? todayKey, {
+        id,
+        title,
+        done: status === 'done',
+        isList,
+        hasNotes,
+      });
       continue;
     }
     const startMin = minutesOfDay(startAt);
     const endMin = endAt ? minutesOfDay(endAt) : startMin + DEFAULT_DURATION_MIN;
-    const day = dateKey(new Date(startAt));
-    const list = timedByDay.get(day) ?? [];
-    list.push({
+    push(timedByDay, dateKey(new Date(startAt)), {
       id,
       title,
       startMin,
       // An end at or before the start means it runs past midnight: clip to the end of the day.
       endMin: endMin > startMin ? endMin : MINUTES_PER_DAY,
-      draggable: isItem,
-      tone: isItem ? 'planner' : 'calendar',
-      checkable: isItem,
+      draggable: true,
+      tone: 'planner',
+      checkable: true,
       done: status === 'done',
       isList,
       hasNotes,
     });
-    timedByDay.set(day, list);
   }
-  return { timedByDay, anytimeByDay };
+  return { timedByDay, anytimeByDay, allDayEventsByDay };
 }
 
 /**

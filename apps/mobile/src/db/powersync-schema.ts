@@ -2,7 +2,7 @@ import { column, Schema, Table, type BaseColumnType } from '@powersync/react-nat
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 
-import { externalEvents, habitDays, tasks } from './schema';
+import { calendarAccounts, calendars, externalEvents, habitDays, tasks } from './schema';
 
 type SqliteColumn = BaseColumnType<string | number | null>;
 
@@ -33,6 +33,8 @@ function toPowerSync(table: PgTable): Table {
 export const AppSchema = new Schema({
   tasks: toPowerSync(tasks),
   habit_days: toPowerSync(habitDays),
+  calendar_accounts: toPowerSync(calendarAccounts),
+  calendars: toPowerSync(calendars),
   external_events: toPowerSync(externalEvents),
   /** Device-only bookkeeping, never synced (e.g. whether the sample data was added). */
   local_meta: new Table({ value: column.text }, { localOnly: true }),

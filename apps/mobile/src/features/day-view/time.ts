@@ -6,9 +6,20 @@ export const DEFAULT_DURATION_MIN = 30;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/**
+ * A stored timestamp as a Date. Synced rows can come in Postgres' text shape
+ * ('2026-11-22 17:00:00Z', '…+00'), which not every JS engine parses: made ISO first.
+ */
+export function parseTimestamp(value: string): Date {
+  let iso = value.trim();
+  if (/^\d{4}-\d{2}-\d{2} /.test(iso)) iso = `${iso.slice(0, 10)}T${iso.slice(11)}`;
+  if (/[+-]\d{2}$/.test(iso)) iso += ':00';
+  return new Date(iso);
+}
+
 /** Minutes since local midnight for an ISO timestamp. */
 export function minutesOfDay(iso: string): number {
-  const d = new Date(iso);
+  const d = parseTimestamp(iso);
   return d.getHours() * 60 + d.getMinutes();
 }
 

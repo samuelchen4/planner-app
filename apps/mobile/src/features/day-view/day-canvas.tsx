@@ -50,6 +50,7 @@ import {
   anytimeHeight,
   anytimeRowTop,
 } from './anytime-list';
+import { AllDayEvents, allDayEventsHeight } from './all-day-events';
 import { CanvasScrollContext } from './canvas-scroll';
 import { PAGE_PAD_X } from './date-header';
 import {
@@ -57,6 +58,7 @@ import {
   bucketEntries,
   contentBounds,
   dayWindow,
+  type AllDayEvent,
   type AnytimeTask,
   type Edge,
   type WindowStretch,
@@ -146,6 +148,7 @@ const NO_ENTRIES: TimelineEntry[] = [];
 const tasksSig = (es: TimelineEntry[]) =>
   es.map((e) => `${e.id}@${e.startMin}-${e.endMin}`).join('|');
 const NO_TASKS: AnytimeTask[] = [];
+const NO_EVENTS: AllDayEvent[] = [];
 
 export interface DayCanvasHandle {
   /** Jump to a day, keeping the same time of day in view (today jumps to the current time). */
@@ -204,12 +207,16 @@ export function DayCanvas({
   useEffect(() => onDraggingChange?.(dragging), [dragging, onDraggingChange]);
   const [viewportHeight, setViewportHeight] = useState(0);
   const { schedule } = useSettings();
-  const { timedByDay, anytimeByDay } = useMemo(
+  const { timedByDay, anytimeByDay, allDayEventsByDay } = useMemo(
     () => bucketEntries(entries, range.todayKey),
     [entries, range.todayKey],
   );
   /** Day i's Anytime tasks. */
   const anytimeOf = (i: number) => anytimeByDay.get(range.keys[i]) ?? NO_TASKS;
+  /** Day i's all-day calendar events (read-only rows above its all-day tasks). */
+  const eventsOf = (i: number) => allDayEventsByDay.get(range.keys[i]) ?? NO_EVENTS;
+  /** Height of day i's label plus its all-day events: where its all-day tasks start. */
+  const headHeight = (i: number) => DAY_LABEL_H + allDayEventsHeight(eventsOf(i).length);
 
   // Manual edges from the stretch handles, per day, with the day's tasks as they were then
   // (`sig`). Once a task on that day is added, moved or removed, the stretch no longer applies and
@@ -244,14 +251,15 @@ export function DayCanvas({
     for (let i = 0; i < range.days.length; i++) {
       const key = range.keys[i];
       const allDay = anytimeHeight(anytimeByDay.get(key)?.length ?? 0);
-      s.push(s[i] + DAY_LABEL_H + allDay + cardHeight(windows[i]) + DAY_GAP);
+      const events = allDayEventsHeight(allDayEventsByDay.get(key)?.length ?? 0);
+      s.push(s[i] + DAY_LABEL_H + events + allDay + cardHeight(windows[i]) + DAY_GAP);
     }
     return s;
-  }, [range, anytimeByDay, spacer, windows]);
+  }, [range, anytimeByDay, allDayEventsByDay, spacer, windows]);
 
   /** Content y of the top of day i's window (its first visible minute). */
   const gridTop = (i: number) =>
-    starts[i] + DAY_LABEL_H + anytimeSection(i) + EDGE_HANDLE_H + GRID_PAD_Y;
+    starts[i] + headHeight(i) + anytimeSection(i) + EDGE_HANDLE_H + GRID_PAD_Y;
 
   /** Content y of a time of day on day i (clamped into that day's window). */
   const timeY = (i: number, minutes: number) => {
@@ -436,13 +444,13 @@ export function DayCanvas({
     if (fingerY < headerHeight) return null;
     const y = offsetRef.current + fingerY;
     const i = dayAt(y);
-    const cardTop = starts[i] + DAY_LABEL_H + anytimeSection(i);
+    const cardTop = starts[i] + headHeight(i) + anytimeSection(i);
     // The date label and the Anytime list both mean "this day, anytime", at the gap between rows
     // nearest the finger. A row dropped back on its own day just goes back.
     if (y < cardTop) {
       if (d.source === 'anytime' && i === d.sourceDay) return null;
       const n = anytimeOf(i).length;
-      const listTop = starts[i] + DAY_LABEL_H + ANYTIME_PAD;
+      const listTop = starts[i] + headHeight(i) + ANYTIME_PAD;
       const gap = Math.round((y - listTop) / (ANYTIME_ROW_H + ANYTIME_ROW_GAP));
       return { kind: 'anytime', day: i, index: Math.max(0, Math.min(n, gap)) };
     }
@@ -542,7 +550,7 @@ export function DayCanvas({
     if (!w) return;
     if ((timedByDay.get(range.keys[day])?.length ?? 0) !== 1) return;
     const from = dayGridHeight(w);
-    const bottom = starts[day] + DAY_LABEL_H + anytimeSection(day) + from;
+    const bottom = starts[day] + headHeight(day) + anytimeSection(day) + from;
     pendingShrinkShift.current =
       bottom <= offsetRef.current + headerHeight ? from - EMPTY_CARD_H : 0;
     shrinkShift.set(0);
@@ -680,7 +688,8 @@ export function DayCanvas({
     const drop = canceled ? null : targetRef.current;
     const fromList = anytimeOf(d.sourceDay);
     const rowIndex = fromList.findIndex((a) => a.id === d.id);
-    const rowTop = starts[d.sourceDay] + DAY_LABEL_H + anytimeRowTop(Math.max(0, rowIndex));
+    const rowTop =
+      starts[d.sourceDay] + headHeight(d.sourceDay) + anytimeRowTop(Math.max(0, rowIndex));
 
     if (drop && d.source === 'anytime' && rowIndex >= 0) {
       // Collapse the row first, then land the task (see removeProgress).
@@ -783,6 +792,7 @@ export function DayCanvas({
       removingId,
       addingId,
       anytimeByDay,
+      allDayEventsByDay,
       growing,
       shrinking,
       emptied,
@@ -795,6 +805,7 @@ export function DayCanvas({
       removingId,
       addingId,
       anytimeByDay,
+      allDayEventsByDay,
       growing,
       shrinking,
       emptied,
@@ -852,6 +863,7 @@ export function DayCanvas({
             entries={timedByDay.get(range.keys[index]) ?? NO_ENTRIES}
             window={windows[index]}
             anytime={anytimeOf(index)}
+            allDayEvents={eventsOf(index)}
             drag={dragHandlers}
             draggingId={drag?.id ?? null}
             dragActive={drag !== null}
@@ -894,6 +906,8 @@ interface DaySectionProps {
   /** null: nothing scheduled (not today), so no grid. */
   window: TimeWindow | null;
   anytime: AnytimeTask[];
+  /** All-day calendar events, shown above the all-day tasks. */
+  allDayEvents: AllDayEvent[];
   drag: TaskDragHandlers;
   draggingId: string | null;
   /** A task is being dragged: missing sections show as dotted drop boxes. */
@@ -926,6 +940,7 @@ function DaySection({
   entries,
   window,
   anytime,
+  allDayEvents,
   drag,
   draggingId,
   dragActive,
@@ -971,10 +986,15 @@ function DaySection({
         <Text className="text-subhead text-muted font-semibold">{label}</Text>
       </View>
 
+      <AllDayEvents events={allDayEvents} />
+
       {anytime.length === 0 && !window && !dragActive && !shrinkWindow && !emptyAppear ? (
         // A day with nothing at all: one card the size of both empty ones (and the gap between),
         // so it can split into the two drop boxes when a drag starts without moving anything.
-        <EmptyCard label="Nothing scheduled" height={anytimeHeight(0) + EMPTY_CARD_H} />
+        <EmptyCard
+          label={allDayEvents.length ? 'Nothing else scheduled' : 'Nothing scheduled'}
+          height={anytimeHeight(0) + EMPTY_CARD_H}
+        />
       ) : (
         <>
           <AnytimeList

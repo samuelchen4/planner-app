@@ -17,12 +17,14 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
+import { useScheme } from '@/lib/theme';
 import { haptics } from '@/lib/haptics';
 import { openItem } from '@/lib/open-item';
 
 import { Checkbox } from './checkbox';
-import { ListIcon, NoteIcon } from './list-icon';
+import { CalendarIcon, ListIcon, NoteIcon } from './list-icon';
 import { follow, liftAt, type TaskDragHandlers } from './drag-layer';
+import { hexWithAlpha } from './event-days';
 import { formatTime } from './time';
 import { MIN_BLOCK_MIN, PX_PER_MIN, type TimelineEntry } from './timeline-constants';
 
@@ -155,6 +157,8 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
           done={done}
           isList={entry.isList}
           hasNotes={entry.hasNotes}
+          color={entry.color}
+          timeLabel={entry.timeLabel}
           check={
             entry.checkable && (
               <GestureDetector gesture={tap}>
@@ -184,6 +188,21 @@ interface BlockBodyProps {
   isList?: boolean;
   /** Has notes: a small note icon follows the title. */
   hasNotes?: boolean;
+  /** Calendar events: their calendar's colour (hex) tints the block; null/invalid = grey. */
+  color?: string | null;
+  /** Replaces the start – end label (a calendar event's own times). */
+  timeLabel?: string;
+}
+
+/**
+ * Fill and stripe for a calendar event in its calendar's colour (a stronger fill in dark mode,
+ * where a light tint disappears), or null when it has none (the neutral grey classes apply).
+ */
+export function useCalendarTint(color: string | null | undefined) {
+  const dark = useScheme() === 'dark';
+  const fill = hexWithAlpha(color, dark ? 0.32 : 0.18);
+  const stripe = hexWithAlpha(color, 1);
+  return fill && stripe ? { fill, stripe } : null;
 }
 
 /** A block's look: tinted card, coloured stripe, title row (title … check) and the time. */
@@ -197,15 +216,25 @@ export function BlockBody({
   check,
   isList = false,
   hasNotes = false,
+  color,
+  timeLabel,
 }: BlockBodyProps) {
+  const tint = useCalendarTint(planner ? null : color);
   return (
     <View
       className={cn(
         'flex-1 flex-row overflow-hidden rounded-lg',
-        !planner ? 'bg-subtle/20' : done ? 'bg-done/15' : 'bg-accent/15',
+        tint ? undefined : !planner ? 'bg-subtle/20' : done ? 'bg-done/15' : 'bg-accent/15',
       )}
+      style={tint ? { backgroundColor: tint.fill } : undefined}
     >
-      <View className={cn('w-1', !planner ? 'bg-subtle' : done ? 'bg-done' : 'bg-accent')} />
+      <View
+        className={cn(
+          'w-1',
+          tint ? undefined : !planner ? 'bg-subtle' : done ? 'bg-done' : 'bg-accent',
+        )}
+        style={tint ? { backgroundColor: tint.stripe } : undefined}
+      />
       <View className={cn('flex-1 pl-2 pr-1.5', compact ? 'justify-center' : 'py-1')}>
         {/* Title row: the title takes what's left and truncates; the check sits at its right,
             no taller than the title line. Compact blocks fit the start time in here too. */}
@@ -221,6 +250,7 @@ export function BlockBody({
           </Text>
           {isList && <ListIcon />}
           {hasNotes && <NoteIcon />}
+          {!planner && <CalendarIcon />}
           {compact && (
             <Text
               numberOfLines={1}
@@ -235,7 +265,7 @@ export function BlockBody({
         </View>
         {!compact && (
           <Text numberOfLines={1} className="text-caption text-muted" style={styles.tabular}>
-            {formatTime(startMin)} – {formatTime(endMin)}
+            {timeLabel ?? `${formatTime(startMin)} – ${formatTime(endMin)}`}
           </Text>
         )}
       </View>

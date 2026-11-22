@@ -1,6 +1,6 @@
 import { addDays, dateKey, isoAtMinutes, toLocalIso } from '@/features/day-view/time';
 
-import type { ExternalEvent, HabitDay, Task, TaskColor } from './schema';
+import type { Calendar, CalendarAccount, ExternalEvent, HabitDay, Task, TaskColor } from './schema';
 import type { StoredRows } from './tables';
 
 // Sample data, written to the phone's database on first launch (and used as-is on the web), so
@@ -136,32 +136,107 @@ function sampleHabitDays(): HabitDay[] {
 }
 
 export function sampleRows(): StoredRows {
-  return { tasks: sampleTasks(), habitDays: sampleHabitDays() };
+  const calendars = sampleCalendars();
+  return {
+    tasks: sampleTasks(),
+    habitDays: sampleHabitDays(),
+    calendarAccounts: [sampleAccount()],
+    calendars,
+    externalEvents: sampleEvents(),
+  };
 }
 
-/** Sample Google Calendar events. Kept in memory: only the server writes real ones. */
-export function sampleEvents(): ExternalEvent[] {
-  const event = (id: string, title: string, start: string, end: string): ExternalEvent => ({
-    id,
+const ACCOUNT = 'sample-account';
+
+/** A sample connected Google account (the web preview only: on the phone, the server writes these). */
+function sampleAccount(): CalendarAccount {
+  const now = toLocalIso(new Date());
+  return {
+    id: ACCOUNT,
     user_id: USER,
     provider: 'google',
-    calendar_id: 'work',
+    email: 'sam@example.com',
+    status: 'active',
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function sampleCalendars(): Calendar[] {
+  const now = toLocalIso(new Date());
+  const calendar = (id: string, name: string, color: string, fields: Partial<Calendar> = {}) => ({
+    id,
+    user_id: USER,
+    account_id: ACCOUNT,
+    provider_calendar_id: `${id}@example.com`,
+    name,
+    color,
+    is_primary: false,
+    access_role: 'owner' as const,
+    is_selected: true,
+    is_planner_calendar: false,
+    created_at: now,
+    updated_at: now,
+    ...fields,
+  });
+  return [
+    calendar('work', 'sam@example.com', '#039BE5', { is_primary: true }),
+    calendar('family', 'Family', '#33B679'),
+    calendar('holidays', 'Holidays', '#8E24AA', { access_role: 'reader', is_selected: false }),
+  ];
+}
+
+/** Sample Google Calendar events (timed, past midnight, all-day and multi-day). */
+export function sampleEvents(): ExternalEvent[] {
+  const base = (id: string, title: string, calendarId: string): ExternalEvent => ({
+    id,
+    user_id: USER,
+    account_id: ACCOUNT,
+    calendar_id: calendarId,
+    provider: 'google',
     external_id: `g-${id}`,
     title,
+    description: null,
     location: null,
-    start_at: at(start),
-    end_at: at(end),
+    start_at: null,
+    end_at: null,
     time_zone: null,
     all_day_start: null,
     all_day_end: null,
     status: 'confirmed',
+    series_id: null,
+    original_start_at: null,
+    web_link: null,
+    version: null,
+    provider_updated_at: null,
+    push_state: 'synced',
     updated_at: toLocalIso(new Date()),
   });
+  const timed = (id: string, title: string, start: string, end: string, cal = 'work') => ({
+    ...base(id, title, cal),
+    start_at: at(start),
+    end_at: at(end),
+  });
+  const allDay = (id: string, title: string, from: number, to: number, cal = 'family') => ({
+    ...base(id, title, cal),
+    all_day_start: dayFromToday(from),
+    all_day_end: dayFromToday(to),
+  });
   return [
-    event('ext-1', 'Team standup', '09:00', '09:15'),
-    event('ext-2', 'Lunch with Priya', '12:30', '13:30'),
-    event('ext-3', 'Design sync', '14:30', '15:30'),
-    event('ext-4', 'Dinner with Sam', '-1 19:30', '-1 21:00'),
-    event('ext-5', 'Dentist', '+1 10:00', '+1 11:00'),
+    {
+      ...timed('ext-1', 'Team standup', '09:00', '09:15'),
+      location: 'Zoom',
+      web_link: 'https://calendar.google.com/',
+    },
+    {
+      ...timed('ext-2', 'Lunch with Priya', '12:30', '13:30', 'family'),
+      description: 'Try the new ramen place.',
+    },
+    timed('ext-3', 'Design sync', '14:30', '15:30'),
+    timed('ext-4', 'Dinner with Sam', '-1 19:30', '-1 21:00', 'family'),
+    timed('ext-5', 'Dentist', '+1 10:00', '+1 11:00'),
+    timed('ext-6', 'Late show', '+1 22:30', '+2 01:00', 'family'),
+    allDay('ext-7', 'Mum’s birthday', 0, 1),
+    allDay('ext-8', 'Team offsite', 2, 5, 'work'),
   ];
 }

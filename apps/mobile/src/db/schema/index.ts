@@ -2,6 +2,7 @@
 // drive the backend (migrations, types) once they move to a shared package; the phone's PowerSync
 // schema is derived from them (see ../powersync-schema.ts).
 
+export * from './calendars';
 export * from './external-events';
 export * from './habit-days';
 export * from './tasks';
