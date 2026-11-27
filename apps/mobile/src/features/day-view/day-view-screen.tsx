@@ -48,7 +48,8 @@ function scheduleItem(id: string, day: Date, startMin: number, durationMin: numb
 
 function moveItemTo(id: string, day: Date, startMin: number) {
   const task = repeating(id);
-  if (!task) return moveTask(id, day, startMin);
+  // Same time on another day: only that day can move ("all days" changes just the time).
+  if (!task || taskTimes(task)?.start === startMin) return moveTask(id, day, startMin);
   void askScope('Move this repeating task?').then((scope) => {
     if (scope === 'one') moveTask(id, day, startMin);
     const times = taskTimes(task);
