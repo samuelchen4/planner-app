@@ -107,6 +107,8 @@ interface ActiveDrag {
   hasNotes: boolean;
   priority: number;
   isRecurring: boolean;
+  /** A piece of a task running past midnight: minutes from the task's start (see TimelineEntry). */
+  offsetMin: number;
   source: 'anytime' | 'block';
   /** The day it was picked up from. */
   sourceDay: number;
@@ -637,6 +639,7 @@ export function DayCanvas({
           hasNotes: t.hasNotes,
           priority: t.priority,
           isRecurring: t.isRecurring,
+          offsetMin: 0,
           source: 'anytime',
           sourceDay: range.indexOf.get(key) ?? range.todayIndex,
           durationMin: DROP_DURATION_MIN,
@@ -647,7 +650,8 @@ export function DayCanvas({
       }
     } else {
       for (const [key, list] of timedByDay) {
-        const e = list.find((x) => x.id === source.id);
+        // The piece that was picked up (a task past midnight has one on each day it touches).
+        const e = list.find((x) => x.id === source.id && x.startMin === source.startMin);
         if (!e) continue;
         const day = range.indexOf.get(key) ?? range.todayIndex;
         d = {
@@ -658,6 +662,7 @@ export function DayCanvas({
           hasNotes: e.hasNotes,
           priority: e.priority ?? 0,
           isRecurring: e.isRecurring ?? false,
+          offsetMin: e.offsetMin ?? 0,
           source: 'block',
           sourceDay: day,
           durationMin: e.endMin - e.startMin,
@@ -736,7 +741,8 @@ export function DayCanvas({
       } else {
         const start = drop.kind === 'grid' ? drop.startMin : newGridStart();
         if (d.home?.day !== drop.day || d.home.startMin !== start) {
-          onMoveItemTo(d.id, range.days[drop.day], start);
+          // The task starts `offsetMin` before this piece (on an earlier day for a later piece).
+          onMoveItemTo(d.id, range.days[drop.day], start - d.offsetMin);
         }
       }
       finishDrag();

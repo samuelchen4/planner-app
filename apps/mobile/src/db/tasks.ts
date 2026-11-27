@@ -6,6 +6,7 @@ import {
   MINUTES_PER_DAY,
   minutesOfDay,
   parseDateKey,
+  parseTimestamp,
   toLocalIso,
 } from '@/features/day-view/time';
 
@@ -27,14 +28,19 @@ export function taskDay(task: Task): string | null {
   return task.start_at ? dateKey(new Date(task.start_at)) : task.all_day_date;
 }
 
-/** Start and end as minutes of the day, for a timed task. */
+/**
+ * Start and end as minutes from the start day's midnight, for a timed task. An end on the next day
+ * is past 1440 (9:15 PM – 1:00 AM is 1275–1500): a task can run past midnight, for under a day.
+ */
 export function taskTimes(task: Task): { start: number; end: number } | null {
   if (!task.start_at) return null;
   const start = minutesOfDay(task.start_at);
   if (!task.end_at) return { start, end: start + DEFAULT_DURATION_MIN };
-  // An end at the next midnight reads as 1440, not 0.
-  const nextDay = dateKey(new Date(task.end_at)) !== dateKey(new Date(task.start_at));
-  return { start, end: nextDay ? MINUTES_PER_DAY : minutesOfDay(task.end_at) };
+  const minutes = Math.round(
+    (parseTimestamp(task.end_at).getTime() - parseTimestamp(task.start_at).getTime()) / 60_000,
+  );
+  // A broken end (at or before the start) reads as the default length, like the web app.
+  return { start, end: start + (minutes > 0 ? Math.min(minutes, MAX_SPAN) : DEFAULT_DURATION_MIN) };
 }
 
 /** The task's priority, 0 (none) to MAX_PRIORITY. Rows synced before the column existed have none. */
@@ -211,18 +217,23 @@ export function setTaskDate(id: string, day: Date | null) {
 
 /** Shortest time the pickers allow. */
 const MIN_SPAN = 15;
+/** Longest: 23 h 45 min (an end at or before the start's clock time is the next day). */
+const MAX_SPAN = MINUTES_PER_DAY - MIN_SPAN;
 
 /**
- * Give the task a time on its day (today when it has no date). An end before the start is pushed
- * to MIN_SPAN after it; nothing runs past midnight.
+ * Give the task a time on its day (today when it has no date). `end` is minutes from the same
+ * midnight; one at or before `start` means that time the next day (9:15 PM → 1:00 AM runs past
+ * midnight), like Google Calendar. At least MIN_SPAN, under a day.
  */
 export function setTaskTime(id: string, start: number, end: number) {
   const task = getTask(id);
   if (!task) return;
   const key = taskDay(task);
   const base = toLocalIso(key ? parseDateKey(key) : addDays(new Date(), 0));
-  const s = Math.min(start, MINUTES_PER_DAY - MIN_SPAN);
-  const e = Math.min(Math.max(end, s + MIN_SPAN), MINUTES_PER_DAY);
+  const s = Math.max(0, Math.min(start, MINUTES_PER_DAY - 1));
+  let span = end - s;
+  if (span <= 0) span += MINUTES_PER_DAY;
+  const e = s + Math.min(Math.max(span, MIN_SPAN), MAX_SPAN);
   updateTask(id, {
     start_at: isoAtMinutes(base, s),
     end_at: isoAtMinutes(base, e),

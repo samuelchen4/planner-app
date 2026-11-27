@@ -4,7 +4,7 @@ import type { DayEntry } from '@/db/entries';
 import { priorityOf } from '@/db/tasks';
 
 import { placeEvent } from './event-days';
-import { dateKey, DEFAULT_DURATION_MIN, formatTime, MINUTES_PER_DAY, minutesOfDay } from './time';
+import { formatTime, MINUTES_PER_DAY, minutesOfDay } from './time';
 import { MIN_BLOCK_MIN, type TimeWindow, type TimelineEntry } from './timeline-constants';
 
 export interface AnytimeTask {
@@ -107,22 +107,36 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
       });
       continue;
     }
-    const startMin = minutesOfDay(startAt);
-    const endMin = endAt ? minutesOfDay(endAt) : startMin + DEFAULT_DURATION_MIN;
-    push(timedByDay, dateKey(new Date(startAt)), {
-      id,
-      title,
-      startMin,
-      // An end at or before the start means it runs past midnight: clip to the end of the day.
-      endMin: endMin > startMin ? endMin : MINUTES_PER_DAY,
-      draggable: true,
-      tone: 'planner',
-      checkable: true,
-      done: status === 'done',
-      isList,
-      hasNotes,
-      priority,
-      isRecurring,
+    // One block per day it touches (like calendar events): 9:15 PM – 1:00 AM is 9:15 PM to
+    // midnight on its day and midnight to 1:00 AM on the next, both labelled with its full times.
+    const placement = placeEvent({
+      start_at: startAt,
+      end_at: endAt,
+      all_day_start: null,
+      all_day_end: null,
+    });
+    if (placement.kind !== 'timed') continue;
+    const segments = placement.segments;
+    const timeLabel = segments.length > 1 ? eventTimeLabel(startAt, endAt) : undefined;
+    const firstStart = segments[0]?.startMin ?? 0;
+    segments.forEach((seg, i) => {
+      push(timedByDay, seg.day, {
+        id,
+        title,
+        startMin: seg.startMin,
+        endMin: seg.endMin,
+        // Later pieces start at midnight: how far into the task that is, so a drag moves the task.
+        offsetMin: i === 0 ? 0 : MINUTES_PER_DAY - firstStart + (i - 1) * MINUTES_PER_DAY,
+        draggable: true,
+        tone: 'planner',
+        checkable: true,
+        done: status === 'done',
+        isList,
+        hasNotes,
+        priority,
+        isRecurring,
+        timeLabel,
+      });
     });
   }
   return { timedByDay, anytimeByDay, allDayEventsByDay };

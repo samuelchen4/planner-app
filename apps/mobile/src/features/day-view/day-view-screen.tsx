@@ -12,6 +12,7 @@ import { useTodayKey } from '@/lib/today';
 import { DateHeader } from './date-header';
 import { DayCanvas, type DayCanvasHandle } from './day-canvas';
 import { buildDayRange } from './day-range';
+import { MINUTES_PER_DAY } from './time';
 import { DragGhost, type GhostTask } from './drag-ghost';
 import { useDragLayer } from './drag-layer';
 
@@ -53,8 +54,9 @@ function moveItemTo(id: string, day: Date, startMin: number) {
   void askScope('Move this repeating task?').then((scope) => {
     if (scope === 'one') moveTask(id, day, startMin);
     const times = taskTimes(task);
-    if (scope === 'all' && times)
-      setAllDaysTime(task, startMin, startMin + times.end - times.start);
+    // A later piece dropped near midnight can put the start on the day before: same clock time.
+    const start = ((startMin % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+    if (scope === 'all' && times) setAllDaysTime(task, start, start + times.end - times.start);
   });
 }
 

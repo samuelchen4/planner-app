@@ -60,6 +60,7 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
     onStart({
       kind: 'block',
       id: entry.id,
+      startMin: entry.startMin,
       anchorMin: grabY / PX_PER_MIN,
       x,
       width: width.current,

@@ -17,7 +17,13 @@ import {
 
 import { ANYTIME_ROW_H } from '@/features/day-view/anytime-list';
 import { Checkbox } from '@/features/day-view/checkbox';
-import { dateKey, formatTime, parseDateKey, toLocalIso } from '@/features/day-view/time';
+import {
+  dateKey,
+  formatTime,
+  MINUTES_PER_DAY,
+  parseDateKey,
+  toLocalIso,
+} from '@/features/day-view/time';
 import { haptics } from '@/lib/haptics';
 import { HabitHistory } from '@/features/habits/habit-history';
 import { HabitBadge, HabitLookPicker } from '@/features/habits/habit-look';
@@ -303,7 +309,7 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
             label="Time"
             value={
               times
-                ? `${formatTime(times.start)} – ${formatTime(times.end)}`
+                ? `${formatTime(times.start)} – ${formatTime(times.end)}${times.end > MINUTES_PER_DAY ? ' (next day)' : ''}`
                 : day
                   ? 'All day'
                   : 'None'
@@ -435,6 +441,7 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
                     style={{ fontVariant: ['tabular-nums'] }}
                   >
                     {formatTime(e === 'start' ? times.start : times.end)}
+                    {e === 'end' && times.end > MINUTES_PER_DAY ? ' +1' : ''}
                   </Text>
                 </Pressable>
               ))}

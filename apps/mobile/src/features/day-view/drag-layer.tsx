@@ -49,6 +49,8 @@ export type DragSource =
   | {
       kind: 'block';
       id: string;
+      /** The block's start (minutes of its day): which piece of a task running past midnight. */
+      startMin: number;
       /** Minutes from the block's top to the finger. */
       anchorMin: number;
       /** The block's left edge and size on screen (for its floating copy). */

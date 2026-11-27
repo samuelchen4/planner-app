@@ -41,6 +41,11 @@ export interface TimelineEntry {
   priority?: number;
   /** Calendar events: their calendar's colour (hex; null = the neutral grey). */
   color?: string | null;
+  /**
+   * A planner task running past midnight shows as a piece per day: minutes from the task's start
+   * to this piece's start (0 for the first piece). Drops move the task by this much less.
+   */
+  offsetMin?: number;
   /** Calendar events: the event's own times, e.g. '10:30 PM – 1:00 AM' (a block may be one day's
    *  piece of it). Defaults to the block's start – end. */
   timeLabel?: string;
