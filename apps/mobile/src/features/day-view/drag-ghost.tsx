@@ -12,6 +12,7 @@ export interface GhostTask {
   isList: boolean;
   hasNotes: boolean;
   priority: number;
+  isRecurring: boolean;
   look: 'row' | 'block';
   width: number;
   height: number;
@@ -39,6 +40,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
           isList={task.isList}
           hasNotes={task.hasNotes}
           priority={task.priority}
+          isRecurring={task.isRecurring}
         />
       ) : (
         <BlockBody
@@ -51,6 +53,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
           isList={task.isList}
           hasNotes={task.hasNotes}
           priority={task.priority}
+          isRecurring={task.isRecurring}
         />
       )}
     </Animated.View>

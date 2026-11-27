@@ -3,7 +3,10 @@ import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { View } from 'react-native';
 
 import { useDayEntries } from '@/db/entries';
-import { moveTask, scheduleTask, toggleDone, unscheduleTask } from '@/db/tasks';
+import { getTask } from '@/db/occurrences';
+import { clearAllDaysTime, setAllDaysTime } from '@/db/recurring';
+import { moveTask, scheduleTask, taskTimes, toggleDone, unscheduleTask } from '@/db/tasks';
+import { askScope } from '@/lib/ask-scope';
 import { useTodayKey } from '@/lib/today';
 
 import { DateHeader } from './date-header';
@@ -23,6 +26,46 @@ import { useDragLayer } from './drag-layer';
 export function DayViewScreen() {
   const todayKey = useTodayKey();
   return <DayView key={todayKey} />;
+}
+
+/**
+ * Drops onto the canvas. A recurring task's day asks first: this day only (that day moves), or all
+ * days (every day gets the new time; the day it was dropped on doesn't matter then).
+ */
+const repeating = (id: string) => {
+  const task = getTask(id);
+  return task?.series_id ? task : null;
+};
+
+function scheduleItem(id: string, day: Date, startMin: number, durationMin: number) {
+  const task = repeating(id);
+  if (!task) return scheduleTask(id, day, startMin, durationMin);
+  void askScope('Give this repeating task a time?').then((scope) => {
+    if (scope === 'one') scheduleTask(id, day, startMin, durationMin);
+    if (scope === 'all') setAllDaysTime(task, startMin, startMin + durationMin);
+  });
+}
+
+function moveItemTo(id: string, day: Date, startMin: number) {
+  const task = repeating(id);
+  if (!task) return moveTask(id, day, startMin);
+  void askScope('Move this repeating task?').then((scope) => {
+    if (scope === 'one') moveTask(id, day, startMin);
+    const times = taskTimes(task);
+    if (scope === 'all' && times)
+      setAllDaysTime(task, startMin, startMin + times.end - times.start);
+  });
+}
+
+function unscheduleItem(id: string, day: Date, beforeId: string | null) {
+  const task = repeating(id);
+  if (!task) return unscheduleTask(id, day, beforeId);
+  // Already all-day (moved within the all-day lists): only that day can move.
+  if (!task.start_at) return unscheduleTask(id, day, beforeId);
+  void askScope('Make this repeating task all-day?').then((scope) => {
+    if (scope === 'one') unscheduleTask(id, day, beforeId);
+    if (scope === 'all') clearAllDaysTime(task);
+  });
 }
 
 function DayView() {
@@ -65,9 +108,9 @@ function DayView() {
         onVisibleDayChange={setSelected}
         onDraggingChange={setDragging}
         onToggleDone={toggleDone}
-        onScheduleItem={scheduleTask}
-        onMoveItemTo={moveTask}
-        onUnscheduleItem={unscheduleTask}
+        onScheduleItem={scheduleItem}
+        onMoveItemTo={moveItemTo}
+        onUnscheduleItem={unscheduleItem}
         dragLayer={dragLayer}
         onDragTaskChange={setDragTask}
       />

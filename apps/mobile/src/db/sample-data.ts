@@ -31,6 +31,8 @@ function task(id: string, title: string, fields: Partial<Task> = {}): Task {
     time_zone: null,
     all_day_date: null,
     rrule: null,
+    series_id: null,
+    occurrence_date: null,
     status: 'open',
     completed_at: null,
     priority: 0,

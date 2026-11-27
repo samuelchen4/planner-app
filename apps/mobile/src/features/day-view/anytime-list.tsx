@@ -17,7 +17,7 @@ import { openItem } from '@/lib/open-item';
 import { usePriorityBorder } from '@/lib/priority';
 
 import { Checkbox } from './checkbox';
-import { ListIcon, NoteIcon } from './list-icon';
+import { ListIcon, NoteIcon, RepeatIcon } from './list-icon';
 import type { AnytimeTask } from './day-entries';
 import { follow, liftAt, type TaskDragHandlers } from './drag-layer';
 import { PopIn } from './morph';
@@ -56,6 +56,7 @@ export function AnytimeRowBody({
   isList = false,
   hasNotes = false,
   priority = 0,
+  isRecurring = false,
 }: {
   title: string;
   done: boolean;
@@ -67,6 +68,8 @@ export function AnytimeRowBody({
   hasNotes?: boolean;
   /** 1–3 draw that level's border. */
   priority?: number;
+  /** A recurring task's day: a repeat icon follows the title. */
+  isRecurring?: boolean;
 }) {
   const border = usePriorityBorder(priority);
   return (
@@ -89,6 +92,7 @@ export function AnytimeRowBody({
           {title}
         </Text>
         {isList && <ListIcon />}
+        {isRecurring && <RepeatIcon />}
         {hasNotes && <NoteIcon />}
         <View className="flex-1" />
         {check ?? (
@@ -359,6 +363,7 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
             isList={task.isList}
             hasNotes={task.hasNotes}
             priority={task.priority}
+            isRecurring={task.isRecurring}
             check={
               <GestureDetector gesture={checkTap}>
                 <View className="h-full items-end justify-center pl-3">

@@ -10,6 +10,7 @@ import {
 } from '@/features/day-view/time';
 
 import { newId } from './ids';
+import { getTask, materialize } from './occurrences';
 import { ownerId } from './owner';
 import { MAX_PRIORITY, type Task } from './schema';
 import { habitDayTable, taskTable } from './tables';
@@ -84,6 +85,8 @@ function blankTask(fields: Partial<Task>): Task {
     time_zone: null,
     all_day_date: null,
     rrule: null,
+    series_id: null,
+    occurrence_date: null,
     status: 'open',
     completed_at: null,
     priority: 0,
@@ -134,19 +137,21 @@ export function deleteIfUntitled(id: string) {
 
 /** Change some fields of a task. */
 export function updateTask(id: string, patch: Partial<Task>) {
+  // A recurring task's unchanged day becomes its own row on its first change.
+  materialize(id);
   taskTable.update(id, { ...patch, updated_at: now() });
 }
 
 /** The priority button's tap: none → ! → !! → !!! → none. */
 export function cyclePriority(id: string) {
-  const task = taskTable.get(id);
+  const task = getTask(id);
   if (!task) return;
   updateTask(id, { priority: (priorityOf(task) + 1) % (MAX_PRIORITY + 1) });
 }
 
 /** Check a task off, or un-check it. */
 export function toggleDone(id: string) {
-  const task = taskTable.get(id);
+  const task = getTask(id);
   if (!task) return;
   const done = task.status !== 'done';
   updateTask(id, { status: done ? 'done' : 'open', completed_at: done ? now() : null });
@@ -164,7 +169,7 @@ export function scheduleTask(id: string, day: Date, startMin: number, durationMi
 
 /** Move a timed task to `day` at `startMin`, keeping its duration. */
 export function moveTask(id: string, day: Date, startMin: number) {
-  const task = taskTable.get(id);
+  const task = getTask(id);
   const times = task && taskTimes(task);
   if (!times) return;
   const base = toLocalIso(day);
@@ -192,7 +197,7 @@ export function unscheduleTask(id: string, day: Date, beforeId: string | null = 
  * removes the date and the time (an undated task is in the inbox).
  */
 export function setTaskDate(id: string, day: Date | null) {
-  const task = taskTable.get(id);
+  const task = getTask(id);
   if (!task) return;
   if (!day) return updateTask(id, { start_at: null, end_at: null, all_day_date: null });
   const times = taskTimes(task);
@@ -212,7 +217,7 @@ const MIN_SPAN = 15;
  * to MIN_SPAN after it; nothing runs past midnight.
  */
 export function setTaskTime(id: string, start: number, end: number) {
-  const task = taskTable.get(id);
+  const task = getTask(id);
   if (!task) return;
   const key = taskDay(task);
   const base = toLocalIso(key ? parseDateKey(key) : addDays(new Date(), 0));
@@ -227,7 +232,7 @@ export function setTaskTime(id: string, start: number, end: number) {
 
 /** Drop the time, keeping the day (it becomes all-day there). */
 export function clearTaskTime(id: string) {
-  const task = taskTable.get(id);
+  const task = getTask(id);
   if (!task?.start_at) return;
   updateTask(id, { start_at: null, end_at: null, all_day_date: dateKey(new Date(task.start_at)) });
 }

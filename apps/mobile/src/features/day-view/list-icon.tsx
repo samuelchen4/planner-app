@@ -23,6 +23,16 @@ export function NoteIcon() {
   );
 }
 
+/** The subtle mark next to a recurring task's title (a circular arrow). */
+export function RepeatIcon() {
+  const colors = useColors();
+  return (
+    <View className="ml-1.5" accessibilityLabel="Repeats">
+      <SymbolView name="repeat" size={11} weight="semibold" tintColor={colors.muted} />
+    </View>
+  );
+}
+
 /** The subtle mark next to a calendar event's title (it's mirrored from another calendar). */
 export function CalendarIcon() {
   const colors = useColors();

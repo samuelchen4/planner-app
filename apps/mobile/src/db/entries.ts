@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { withOccurrences } from './occurrences';
 import type { Calendar, CalendarAccount, ExternalEvent, Task } from './schema';
 import { useCalendarAccounts, useCalendars, useExternalEvents, useTasks } from './tables';
 
@@ -46,7 +47,8 @@ export function useDayEntries(): DayEntry[] {
   const accounts = useCalendarAccounts();
   return useMemo(
     () => [
-      ...tasks.map((item): DayEntry => ({ kind: 'item', item })),
+      // Recurring series show as their days (see occurrences).
+      ...withOccurrences(tasks).map((item): DayEntry => ({ kind: 'item', item })),
       ...externalEntries(events, calendars, accounts),
     ],
     [tasks, events, calendars, accounts],

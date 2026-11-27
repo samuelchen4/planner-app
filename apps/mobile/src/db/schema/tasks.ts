@@ -38,8 +38,18 @@ export const tasks = pgTable(
     time_zone: text(),
     /** All-day: the day it's on. */
     all_day_date: day(),
-    /** Repeats (RFC 5545), e.g. 'FREQ=WEEKLY;BYDAY=MO,WE'. Not used by the app yet. */
+    /**
+     * A recurring series: its repeat rule (RFC 5545, see @planner/core recurrence), e.g.
+     * 'FREQ=WEEKLY;BYDAY=MO,WE'. Its date and time are the first day's. The series row itself isn't
+     * shown: each day it falls on is (see db/recurring).
+     */
     rrule: text(),
+    /**
+     * One day of a series that was changed (checked off, moved; deleted = cancelled): the series and
+     * the day it belongs to. Unchanged days aren't stored.
+     */
+    series_id: uuid().references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
+    occurrence_date: day(),
 
     status: text({ enum: TASK_STATUSES }).notNull().default('open'),
     /** When it was checked off (set with status 'done'). */
@@ -61,7 +71,11 @@ export const tasks = pgTable(
     created_at: timestamptz().notNull().defaultNow(),
     updated_at: timestamptz().notNull().defaultNow(),
   },
-  (t) => [index('tasks_user_idx').on(t.user_id), index('tasks_list_idx').on(t.list_id)],
+  (t) => [
+    index('tasks_user_idx').on(t.user_id),
+    index('tasks_list_idx').on(t.list_id),
+    index('tasks_series_idx').on(t.series_id),
+  ],
 );
 
 export type Task = typeof tasks.$inferSelect;

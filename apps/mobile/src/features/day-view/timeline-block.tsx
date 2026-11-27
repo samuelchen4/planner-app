@@ -23,7 +23,7 @@ import { haptics } from '@/lib/haptics';
 import { openItem } from '@/lib/open-item';
 
 import { Checkbox } from './checkbox';
-import { CalendarIcon, ListIcon, NoteIcon } from './list-icon';
+import { CalendarIcon, ListIcon, NoteIcon, RepeatIcon } from './list-icon';
 import { follow, liftAt, type TaskDragHandlers } from './drag-layer';
 import { hexWithAlpha } from './event-days';
 import { formatTime } from './time';
@@ -159,6 +159,7 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
           isList={entry.isList}
           hasNotes={entry.hasNotes}
           priority={entry.priority}
+          isRecurring={entry.isRecurring}
           color={entry.color}
           timeLabel={entry.timeLabel}
           check={
@@ -192,6 +193,8 @@ interface BlockBodyProps {
   hasNotes?: boolean;
   /** Planner items: 1–3 draw that level's border. */
   priority?: number;
+  /** A recurring task's day: a repeat icon follows the title. */
+  isRecurring?: boolean;
   /** Calendar events: their calendar's colour (hex) tints the block; null/invalid = grey. */
   color?: string | null;
   /** Replaces the start – end label (a calendar event's own times). */
@@ -221,6 +224,7 @@ export function BlockBody({
   isList = false,
   hasNotes = false,
   priority = 0,
+  isRecurring = false,
   color,
   timeLabel,
 }: BlockBodyProps) {
@@ -255,6 +259,7 @@ export function BlockBody({
             {title}
           </Text>
           {isList && <ListIcon />}
+          {isRecurring && <RepeatIcon />}
           {hasNotes && <NoteIcon />}
           {!planner && <CalendarIcon />}
           {compact && (
@@ -288,6 +293,7 @@ export interface DropPreview {
   isList?: boolean;
   hasNotes?: boolean;
   priority?: number;
+  isRecurring?: boolean;
 }
 
 /**
@@ -302,6 +308,7 @@ export function PreviewBlock({
   isList,
   hasNotes,
   priority,
+  isRecurring,
 }: DropPreview) {
   const height = Math.max(endMin - startMin, MIN_BLOCK_MIN) * PX_PER_MIN;
   const top = useSharedValue(startMin * PX_PER_MIN);
@@ -327,6 +334,7 @@ export function PreviewBlock({
         isList={isList}
         hasNotes={hasNotes}
         priority={priority}
+        isRecurring={isRecurring}
         check={
           <View className="items-end justify-center pl-2" style={styles.checkTarget}>
             <Checkbox done={false} size={CHECK_SIZE} />

@@ -1,5 +1,6 @@
 import { cn } from '@planner/ui';
 import { router, useLocalSearchParams } from 'expo-router';
+import { describeRecurrence, presetRecurrence, type Recurrence } from '@planner/core';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -21,7 +22,7 @@ import { haptics } from '@/lib/haptics';
 import { HabitHistory } from '@/features/habits/habit-history';
 import { HabitBadge, HabitLookPicker } from '@/features/habits/habit-look';
 import { entryId, useDayEntries } from '@/db/entries';
-import type { Task } from '@/db/schema';
+import { MAX_PRIORITY, type Task } from '@/db/schema';
 import { taskTable } from '@/db/tables';
 import {
   clearTaskTime,
@@ -39,11 +40,24 @@ import {
   updateTask,
 } from '@/db/tasks';
 import { priorityMarks, textOn, usePriorityColor } from '@/lib/priority';
+import { askScope } from '@/lib/ask-scope';
 import { useColors, useThemeStyle } from '@/lib/theme';
+import {
+  clearAllDaysTime,
+  deleteAllDays,
+  deleteThisDay,
+  makeRecurring,
+  recurrenceOf,
+  setAllDaysTime,
+  setRecurrence,
+  stopRecurring,
+  updateAllDays,
+} from '@/db/recurring';
 
 import { DraftInput } from './draft-input';
 import { dayLabel, FieldRow, Separator } from './fields';
 import { EventDetails } from './event-details';
+import { RepeatEditor } from './repeat-editor';
 import { CalendarPicker, TimeWheel } from './pickers';
 
 /**
@@ -85,7 +99,7 @@ function atMinutes(day: Date, minutes: number): Date {
   return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
 }
 
-type Picker = 'date' | 'time' | null;
+type Picker = 'date' | 'time' | 'repeat' | null;
 
 const KIND_NAME: Record<Task['type'], string> = {
   task: 'Task',
@@ -113,32 +127,98 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
   const day = key ? parseDateKey(key) : null;
   const times = taskTimes(item);
 
+  // Recurring: a day of a series. Title, notes and priority change every day; the time asks.
+  const recurring = !!item.series_id;
+  const recurrence = recurrenceOf(item);
+  const canRepeat = (item.type === 'task' || item.type === 'time_block') && !item.list_id;
+  const [timeScope, setTimeScope] = useState<'one' | 'all'>('one');
+  const [repeatDraft, setRepeatDraft] = useState<Recurrence | null>(null);
+  const edit = (patch: Partial<Task>) =>
+    recurring ? updateAllDays(item, patch) : updateTask(item.id, patch);
+  const applyTime = (start: number, end: number) =>
+    timeScope === 'all' ? setAllDaysTime(item, start, end) : setTaskTime(item.id, start, end);
+
+  const openRepeat = () => {
+    const first = recurrence?.start ?? key ?? dateKey(new Date());
+    setRepeatDraft(recurrence?.rule ?? presetRecurrence('daily', first));
+    setPicker('repeat');
+  };
+  const closeRepeat = () => {
+    if (repeatDraft) {
+      if (recurring) setRecurrence(item, repeatDraft);
+      else makeRecurring(item, repeatDraft);
+    }
+    setRepeatDraft(null);
+    setPicker(null);
+  };
+  const confirmStopRepeating = () =>
+    Alert.alert(
+      'Stop repeating?',
+      'This day stays; the other days are removed (checked-off ones stay).',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Stop Repeating', style: 'destructive', onPress: () => stopRecurring(item) },
+      ],
+    );
+
   const openDate = () => {
     // Turning the date on starts at today, like Reminders; the calendar then changes it.
     if (!day) setTaskDate(item.id, new Date());
     setPicker('date');
   };
-  const openTime = () => {
+  const openTime = async () => {
+    // A recurring task's time: for this day or every day? Asked once, then the wheel applies it.
+    const scope = recurring ? await askScope('Change the time for…') : 'one';
+    if (!scope) return;
+    setTimeScope(scope);
     if (!times) {
       // A first time: the next whole hour today, else 9 AM, for an hour.
       const now = new Date();
       const isToday = !day || dateKey(day) === dateKey(now);
       const start = isToday ? Math.min((now.getHours() + 1) * 60, 23 * 60) : 9 * 60;
-      setTaskTime(item.id, start, start + 60);
+      if (scope === 'all') setAllDaysTime(item, start, start + 60);
+      else setTaskTime(item.id, start, start + 60);
     }
     setEdge('start');
     setPicker('time');
   };
+  const clearTime = async () => {
+    const scope = recurring ? await askScope('Make this repeating task all-day?') : 'one';
+    if (scope === 'one') clearTaskTime(item.id);
+    if (scope === 'all') clearAllDaysTime(item);
+  };
   // Deleting closes the sheet first; the row goes once the sheet is gone (deleting it while the
   // sheet is still sliding away would flash "Not found").
-  const deleteOnClose = useRef(false);
+  const deleteOnClose = useRef<(() => void) | null>(null);
   useEffect(
     () => () => {
-      if (deleteOnClose.current) deleteTask(item.id);
+      deleteOnClose.current?.();
     },
     [item.id],
   );
+  const closeThen = (remove: () => void) => {
+    haptics.tick();
+    deleteOnClose.current = remove;
+    if (router.canGoBack()) router.back();
+    else remove();
+  };
   const confirmDelete = () => {
+    if (recurring) {
+      Alert.alert('Delete Repeating Task?', undefined, [
+        {
+          text: 'Delete This Day',
+          style: 'destructive',
+          onPress: () => closeThen(() => deleteThisDay(item.id)),
+        },
+        {
+          text: 'Delete All Days',
+          style: 'destructive',
+          onPress: () => closeThen(() => deleteAllDays(item)),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
     const kind = KIND_NAME[item.type];
     const entryCount = entriesOf(taskTable.all(), item.id).length;
     const extra =
@@ -152,12 +232,7 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
-          haptics.tick();
-          deleteOnClose.current = true;
-          if (router.canGoBack()) router.back();
-          else deleteTask(item.id);
-        },
+        onPress: () => closeThen(() => deleteTask(item.id)),
       },
     ]);
   };
@@ -167,8 +242,8 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
     const min = d.getHours() * 60 + d.getMinutes();
     if (edge === 'start') {
       // Moving the start keeps the duration.
-      setTaskTime(item.id, min, min + (times.end - times.start));
-    } else setTaskTime(item.id, times.start, min);
+      applyTime(min, min + (times.end - times.start));
+    } else applyTime(times.start, min);
   };
 
   return (
@@ -179,7 +254,7 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
           {isHabit && <HabitBadge habit={item} />}
           <DraftInput
             value={item.title}
-            onCommit={(title) => updateTask(item.id, { title })}
+            onCommit={(title) => edit({ title })}
             // Made by the add button: type its name straight away (focused above); closing without
             // one discards it.
             ref={titleRef}
@@ -206,7 +281,8 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
           />
           {!isHabit && <PriorityButton item={item} />}
         </View>
-        {!isHabit && <Subtasks parent={item} />}
+        {/* Recurring tasks don't have subtasks (yet). */}
+        {!isHabit && !recurring && <Subtasks parent={item} />}
       </View>
 
       {/* Body: when (not for habits: they're every day, untimed), then notes */}
@@ -218,7 +294,8 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
             value={dayLabel(key)}
             active={picker === 'date'}
             onPress={openDate}
-            onClear={day ? () => setTaskDate(item.id, null) : undefined}
+            // A repeating task's day always has a date (changing it moves just this day).
+            onClear={day && !recurring ? () => setTaskDate(item.id, null) : undefined}
           />
           <Separator />
           <FieldRow
@@ -232,9 +309,22 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
                   : 'None'
             }
             active={picker === 'time'}
-            onPress={openTime}
-            onClear={times ? () => clearTaskTime(item.id) : undefined}
+            onPress={() => void openTime()}
+            onClear={times ? () => void clearTime() : undefined}
           />
+          {canRepeat && (
+            <>
+              <Separator />
+              <FieldRow
+                icon="repeat"
+                label={recurring ? 'Repeats' : 'Make recurring'}
+                value={recurrence ? describeRecurrence(recurrence.rule, recurrence.start) : ''}
+                active={picker === 'repeat'}
+                onPress={openRepeat}
+                onClear={recurring ? confirmStopRepeating : undefined}
+              />
+            </>
+          )}
         </View>
       )}
 
@@ -249,7 +339,7 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
         <View className="bg-card rounded-card px-4 py-3">
           <DraftInput
             value={item.notes ?? ''}
-            onCommit={(notes) => updateTask(item.id, { notes: notes || null })}
+            onCommit={(notes) => edit({ notes: notes || null })}
             placeholder="Notes"
             placeholderTextColor={colors.subtle}
             multiline
@@ -295,6 +385,22 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
         onClose={() => setPicker(null)}
       >
         {day && <CalendarPicker value={day} onChange={(d) => setTaskDate(item.id, d)} />}
+      </PickerModal>
+
+      <PickerModal
+        visible={picker === 'repeat' && repeatDraft !== null}
+        title="Repeat"
+        onClose={closeRepeat}
+      >
+        {repeatDraft && (
+          <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ paddingBottom: 4 }}>
+            <RepeatEditor
+              value={repeatDraft}
+              start={recurrence?.start ?? key ?? dateKey(new Date())}
+              onChange={setRepeatDraft}
+            />
+          </ScrollView>
+        )}
       </PickerModal>
 
       <PickerModal
@@ -360,7 +466,9 @@ function PriorityButton({ item }: { item: Task }) {
     <Pressable
       onPress={() => {
         haptics.tick();
-        cyclePriority(item.id);
+        // A repeating task's priority is the same every day.
+        if (item.series_id) updateAllDays(item, { priority: (level + 1) % (MAX_PRIORITY + 1) });
+        else cyclePriority(item.id);
       }}
       hitSlop={8}
       accessibilityRole="button"

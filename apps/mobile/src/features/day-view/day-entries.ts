@@ -16,6 +16,8 @@ export interface AnytimeTask {
   hasNotes: boolean;
   /** 0 = none, 1–3: drawn with that level's border. */
   priority: number;
+  /** A day of a recurring task: drawn with a repeat icon by its title. */
+  isRecurring: boolean;
 }
 
 /** A calendar event in a day's all-day area (read-only: no check, can't be dragged). */
@@ -91,6 +93,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
     const isList = item.type === 'list';
     const hasNotes = !!item.notes?.trim();
     const priority = priorityOf(item);
+    const isRecurring = !!item.series_id;
     if (!startAt) {
       if (isList && !item.all_day_date) continue;
       push(anytimeByDay, item.all_day_date ?? todayKey, {
@@ -100,6 +103,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
         isList,
         hasNotes,
         priority,
+        isRecurring,
       });
       continue;
     }
@@ -118,6 +122,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
       isList,
       hasNotes,
       priority,
+      isRecurring,
     });
   }
   return { timedByDay, anytimeByDay, allDayEventsByDay };
