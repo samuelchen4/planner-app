@@ -17,6 +17,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
+import { usePriorityBorder } from '@/lib/priority';
 import { useScheme } from '@/lib/theme';
 import { haptics } from '@/lib/haptics';
 import { openItem } from '@/lib/open-item';
@@ -157,6 +158,7 @@ export function TimelineBlock({ entry, column, columns, drag, faded, onToggleDon
           done={done}
           isList={entry.isList}
           hasNotes={entry.hasNotes}
+          priority={entry.priority}
           color={entry.color}
           timeLabel={entry.timeLabel}
           check={
@@ -188,6 +190,8 @@ interface BlockBodyProps {
   isList?: boolean;
   /** Has notes: a small note icon follows the title. */
   hasNotes?: boolean;
+  /** Planner items: 1–3 draw that level's border. */
+  priority?: number;
   /** Calendar events: their calendar's colour (hex) tints the block; null/invalid = grey. */
   color?: string | null;
   /** Replaces the start – end label (a calendar event's own times). */
@@ -216,17 +220,19 @@ export function BlockBody({
   check,
   isList = false,
   hasNotes = false,
+  priority = 0,
   color,
   timeLabel,
 }: BlockBodyProps) {
   const tint = useCalendarTint(planner ? null : color);
+  const border = usePriorityBorder(planner ? priority : 0);
   return (
     <View
       className={cn(
         'flex-1 flex-row overflow-hidden rounded-lg',
         tint ? undefined : !planner ? 'bg-subtle/20' : done ? 'bg-done/15' : 'bg-accent/15',
       )}
-      style={tint ? { backgroundColor: tint.fill } : undefined}
+      style={[tint && { backgroundColor: tint.fill }, border]}
     >
       <View
         className={cn(
@@ -281,13 +287,22 @@ export interface DropPreview {
   lifted: boolean;
   isList?: boolean;
   hasNotes?: boolean;
+  priority?: number;
 }
 
 /**
  * Where a dragged Anytime task would land: a block at its absolute time of day, over the others,
  * springing from slot to slot as the finger moves.
  */
-export function PreviewBlock({ title, startMin, endMin, lifted, isList, hasNotes }: DropPreview) {
+export function PreviewBlock({
+  title,
+  startMin,
+  endMin,
+  lifted,
+  isList,
+  hasNotes,
+  priority,
+}: DropPreview) {
   const height = Math.max(endMin - startMin, MIN_BLOCK_MIN) * PX_PER_MIN;
   const top = useSharedValue(startMin * PX_PER_MIN);
   useEffect(() => {
@@ -311,6 +326,7 @@ export function PreviewBlock({ title, startMin, endMin, lifted, isList, hasNotes
         done={false}
         isList={isList}
         hasNotes={hasNotes}
+        priority={priority}
         check={
           <View className="items-end justify-center pl-2" style={styles.checkTarget}>
             <Checkbox done={false} size={CHECK_SIZE} />

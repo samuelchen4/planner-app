@@ -14,6 +14,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { DOUBLE_TAP_MAX_DELAY_MS } from '@/lib/gestures';
 import { haptics } from '@/lib/haptics';
 import { openItem } from '@/lib/open-item';
+import { usePriorityBorder } from '@/lib/priority';
 
 import { Checkbox } from './checkbox';
 import { ListIcon, NoteIcon } from './list-icon';
@@ -54,6 +55,7 @@ export function AnytimeRowBody({
   check,
   isList = false,
   hasNotes = false,
+  priority = 0,
 }: {
   title: string;
   done: boolean;
@@ -63,13 +65,17 @@ export function AnytimeRowBody({
   isList?: boolean;
   /** Has notes: a small note icon follows the title. */
   hasNotes?: boolean;
+  /** 1–3 draw that level's border. */
+  priority?: number;
 }) {
+  const border = usePriorityBorder(priority);
   return (
     <View
       className={cn(
         'flex-1 flex-row overflow-hidden rounded-lg',
         done ? 'bg-done/15' : 'bg-accent/15',
       )}
+      style={border}
     >
       <View className={cn('w-1', done ? 'bg-done' : 'bg-accent')} />
       <View className="flex-1 flex-row items-center pl-2 pr-1.5">
@@ -352,6 +358,7 @@ function AnytimeRow({ task, first, onToggleDone, drag, faded, motion, progress }
             done={task.done}
             isList={task.isList}
             hasNotes={task.hasNotes}
+            priority={task.priority}
             check={
               <GestureDetector gesture={checkTap}>
                 <View className="h-full items-end justify-center pl-3">

@@ -5,6 +5,8 @@ import { accessToken } from '@/auth/supabase';
 import type { CalendarProvider } from '@/db/schema';
 import { config } from '@/lib/config';
 
+import { providerName } from './providers';
+
 // Connecting and disconnecting calendar accounts through the backend (/integrations). The account,
 // its calendars and their events then arrive (or leave) through PowerSync.
 
@@ -30,11 +32,6 @@ export type ConnectResult =
   /** The user closed the browser, or declined on the provider's consent screen. */
   | { status: 'cancelled' }
   | { status: 'failed'; message: string };
-
-const PROVIDER_NAME: Record<CalendarProvider, string> = {
-  google: 'Google',
-  microsoft: 'Microsoft',
-};
 
 async function api(path: string, init: RequestInit): Promise<Response> {
   const token = await accessToken();
@@ -65,7 +62,7 @@ function reasonOf(url: string): string | null {
  * (or `/error?reason=…`), which closes the session.
  */
 export async function connectCalendar(provider: CalendarProvider): Promise<ConnectResult> {
-  const name = PROVIDER_NAME[provider];
+  const name = providerName(provider);
   try {
     const scheme = appScheme();
     const res = await api(`/integrations/${provider}/start`, {
@@ -78,7 +75,7 @@ export async function connectCalendar(provider: CalendarProvider): Promise<Conne
         status: 'failed',
         message:
           res.status === 503
-            ? `${name} calendars aren’t available yet.`
+            ? `${name} isn’t available yet.`
             : (body?.error ?? `Couldn’t start connecting ${name} (${res.status}).`),
       };
     }

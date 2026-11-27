@@ -33,6 +33,7 @@ function task(id: string, title: string, fields: Partial<Task> = {}): Task {
     rrule: null,
     status: 'open',
     completed_at: null,
+    priority: 0,
     list_id: null,
     color: null,
     icon: null,

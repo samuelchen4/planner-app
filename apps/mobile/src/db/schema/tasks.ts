@@ -1,4 +1,12 @@
-import { doublePrecision, index, pgTable, text, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  doublePrecision,
+  index,
+  pgTable,
+  smallint,
+  text,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 
 import { day, timestamptz } from './columns';
 
@@ -36,6 +44,8 @@ export const tasks = pgTable(
     status: text({ enum: TASK_STATUSES }).notNull().default('open'),
     /** When it was checked off (set with status 'done'). */
     completed_at: timestamptz(),
+    /** 0 = none, 1–3 = !, !!, !!! (3 is the highest). Read it with `priorityOf`. */
+    priority: smallint().notNull().default(0),
 
     /** An entry of a list: the list's id. Entries have no times or dates of their own. */
     list_id: uuid().references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
@@ -57,3 +67,4 @@ export const tasks = pgTable(
 export type Task = typeof tasks.$inferSelect;
 export type TaskType = Task['type'];
 export type TaskColor = NonNullable<Task['color']>;
+export const MAX_PRIORITY = 3;

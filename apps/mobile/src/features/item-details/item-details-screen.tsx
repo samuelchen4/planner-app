@@ -25,10 +25,12 @@ import type { Task } from '@/db/schema';
 import { taskTable } from '@/db/tables';
 import {
   clearTaskTime,
+  cyclePriority,
   deleteIfUntitled,
   deleteTask,
   entriesOf,
   newEntry,
+  priorityOf,
   saveEntries,
   setTaskDate,
   setTaskTime,
@@ -36,6 +38,7 @@ import {
   taskTimes,
   updateTask,
 } from '@/db/tasks';
+import { priorityMarks, textOn, usePriorityColor } from '@/lib/priority';
 import { useColors, useThemeStyle } from '@/lib/theme';
 
 import { DraftInput } from './draft-input';
@@ -201,6 +204,7 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
             className="font-rounded text-title2 text-ink flex-1 p-0 font-bold"
             accessibilityLabel="Title"
           />
+          {!isHabit && <PriorityButton item={item} />}
         </View>
         {!isHabit && <Subtasks parent={item} />}
       </View>
@@ -339,6 +343,39 @@ function ItemDetails({ item, isNew }: { item: Task; isNew: boolean }) {
         )}
       </PickerModal>
     </>
+  );
+}
+
+const PRIORITY_NAMES = ['No priority', 'Low priority', 'Medium priority', 'High priority'];
+
+/**
+ * The priority toggle by the title: each tap steps none → ! → !! → !!! → none. None is an outlined,
+ * muted "!"; a level fills the button with the colour its border has on the day view.
+ */
+function PriorityButton({ item }: { item: Task }) {
+  const colors = useColors();
+  const level = priorityOf(item);
+  const fill = usePriorityColor(level);
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.tick();
+        cyclePriority(item.id);
+      }}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={PRIORITY_NAMES[level]}
+      accessibilityHint="Changes the priority"
+      className="h-8 min-w-8 items-center justify-center self-start rounded-full px-2.5 active:opacity-60"
+      style={fill ? { backgroundColor: fill } : { borderWidth: 1.5, borderColor: colors.border }}
+    >
+      <Text
+        className="text-subhead font-bold"
+        style={{ color: fill ? textOn(fill) : colors.subtle, letterSpacing: -0.5 }}
+      >
+        {priorityMarks(level)}
+      </Text>
+    </Pressable>
   );
 }
 

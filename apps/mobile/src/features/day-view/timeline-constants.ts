@@ -35,6 +35,8 @@ export interface TimelineEntry {
   isList: boolean;
   /** Has notes: drawn with a small note icon by its title. */
   hasNotes: boolean;
+  /** Planner items: 0 = none, 1–3 = that level's border (calendar events: always 0). */
+  priority?: number;
   /** Calendar events: their calendar's colour (hex; null = the neutral grey). */
   color?: string | null;
   /** Calendar events: the event's own times, e.g. '10:30 PM – 1:00 AM' (a block may be one day's

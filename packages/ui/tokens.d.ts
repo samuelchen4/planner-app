@@ -19,6 +19,9 @@ export declare const noteColors: Record<
   ColorScheme,
   Record<NoteColor, { paper: string; edge: string }>
 >;
+/** 1 = !, 2 = !!, 3 = !!! (0 = none has no colour). */
+export type PriorityLevel = 1 | 2 | 3;
+export declare const priorityColors: Record<ColorScheme, Record<PriorityLevel, string>>;
 export declare const typeScale: Record<string, [fontSize: string, lineHeight: string]>;
 export declare function themeVariables(
   scheme: ColorScheme,

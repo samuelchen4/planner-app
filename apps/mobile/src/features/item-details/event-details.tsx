@@ -4,12 +4,11 @@ import { Linking, Pressable, Text, View } from 'react-native';
 
 import type { ExternalEntry } from '@/db/entries';
 import { daysBetween, hexWithAlpha } from '@/features/day-view/event-days';
+import { providerName } from '@/features/calendars/providers';
 import { dateKey, formatTime, parseTimestamp } from '@/features/day-view/time';
 import { useColors } from '@/lib/theme';
 
 import { dayLabel, FieldRow, Separator } from './fields';
-
-const PROVIDER_NAME = { google: 'Google Calendar', microsoft: 'Outlook' } as const;
 
 const minutesOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
@@ -74,11 +73,12 @@ export function plainText(html: string): string {
     .trim();
 }
 
-/** A mirrored calendar event: read-only (it's edited in Google). */
+/** A mirrored calendar event: read-only (it's edited at its provider). */
 export function EventDetails({ entry }: { entry: ExternalEntry }) {
   const colors = useColors();
   const { event, calendar, account } = entry;
-  const providerName = PROVIDER_NAME[event.provider] ?? 'your calendar';
+  const source = providerName(event.provider);
+  const linkLabel = `Open in ${providerName(event.provider, 'calendar')}`;
   const rows = whenRows(event);
   const notes = event.description ? plainText(event.description) : '';
   const location = event.location?.trim();
@@ -120,7 +120,7 @@ export function EventDetails({ entry }: { entry: ExternalEntry }) {
           <View className="flex-row items-center gap-2">
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }} />
             <Text className="text-body text-ink shrink" numberOfLines={1}>
-              {calendar?.name || providerName}
+              {calendar?.name || source}
             </Text>
           </View>
           {account && (
@@ -147,11 +147,11 @@ export function EventDetails({ entry }: { entry: ExternalEntry }) {
           className="bg-card rounded-card min-h-11 flex-row items-center justify-center gap-2 py-3 active:opacity-60"
         >
           <SymbolView name="arrow.up.right.square" size={16} tintColor={colors.accent} />
-          <Text className="text-body text-accent">Open in {providerName}</Text>
+          <Text className="text-body text-accent">{linkLabel}</Text>
         </Pressable>
       )}
 
-      <Text className="text-footnote text-subtle px-1">From {providerName} · read-only</Text>
+      <Text className="text-footnote text-subtle px-1">From {source} · read-only</Text>
     </>
   );
 }

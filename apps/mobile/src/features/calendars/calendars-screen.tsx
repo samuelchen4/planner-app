@@ -20,11 +20,7 @@ import { haptics } from '@/lib/haptics';
 import { useColors } from '@/lib/theme';
 
 import { connectCalendar, disconnectAccount } from './connect';
-
-const PROVIDER_LABEL: Record<CalendarProvider, string> = {
-  google: 'Google',
-  microsoft: 'Outlook',
-};
+import { CONNECT_LABEL, CONNECTABLE_PROVIDERS, providerName } from './providers';
 
 /** How long "Getting your calendars…" waits for the new account to sync in. */
 const SYNC_WAIT_MS = 30_000;
@@ -32,12 +28,13 @@ const SYNC_WAIT_MS = 30_000;
 /**
  * Settings → Calendars: connected accounts with their calendars (a switch each, which shows or
  * hides that calendar's events in the day view), Reconnect / Disconnect, and Connect Google
- * Calendar.
+ * Calendar / Outlook.
  */
 export function CalendarsScreen() {
   const accounts = useCalendarAccounts();
   const calendars = useCalendars();
-  const [connecting, setConnecting] = useState(false);
+  /** The provider whose connect flow is running. */
+  const [connecting, setConnecting] = useState<CalendarProvider | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   // After a successful connect: the account count then. "Getting your calendars…" shows until
   // there are more accounts than that (it syncs in) or SYNC_WAIT_MS passes.
@@ -60,13 +57,13 @@ export function CalendarsScreen() {
     return map;
   }, [calendars]);
 
-  const connect = async (provider: CalendarProvider = 'google', reconnecting = false) => {
+  const connect = async (provider: CalendarProvider, reconnecting = false) => {
     if (connecting) return;
-    setConnecting(true);
+    setConnecting(provider);
     setMessage(null);
     const before = accounts.length;
     const result = await connectCalendar(provider);
-    setConnecting(false);
+    setConnecting(null);
     if (result.status === 'connected') {
       haptics.check();
       // A new account syncs in within seconds (it may already have).
@@ -74,7 +71,7 @@ export function CalendarsScreen() {
     } else if (result.status === 'cancelled') {
       setMessage({
         tone: 'info',
-        text: 'Calendar not connected. You can connect it any time.',
+        text: `${providerName(provider)} not connected. You can connect it any time.`,
       });
     } else {
       setMessage({ tone: 'error', text: result.message });
@@ -95,7 +92,7 @@ export function CalendarsScreen() {
             key={account.id}
             account={account}
             calendars={calendarsByAccount.get(account.id) ?? []}
-            busy={connecting}
+            busy={connecting !== null}
             onReconnect={() => void connect(account.provider, true)}
           />
         ))
@@ -109,7 +106,15 @@ export function CalendarsScreen() {
       )}
 
       <View className="gap-2">
-        <ConnectButton connecting={connecting} onPress={() => void connect('google')} />
+        {CONNECTABLE_PROVIDERS.map((provider) => (
+          <ConnectButton
+            key={provider}
+            provider={provider}
+            connecting={connecting === provider}
+            disabled={connecting !== null}
+            onPress={() => void connect(provider)}
+          />
+        ))}
         {message && (
           <Text
             className={cn(
@@ -132,20 +137,31 @@ function EmptyState() {
       <SymbolView name="calendar" size={32} tintColor={colors.subtle} />
       <Text className="text-headline text-ink font-semibold">No calendars connected</Text>
       <Text className="text-subhead text-muted text-center">
-        Connect Google Calendar to see your events on the Today screen, next to your tasks.
+        Connect Google Calendar or Outlook to see your events on the Today screen, next to your
+        tasks.
       </Text>
     </View>
   );
 }
 
-function ConnectButton({ connecting, onPress }: { connecting: boolean; onPress: () => void }) {
+function ConnectButton({
+  provider,
+  connecting,
+  disabled,
+  onPress,
+}: {
+  provider: CalendarProvider;
+  connecting: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
   const colors = useColors();
   return (
     <Pressable
       onPress={onPress}
-      disabled={connecting}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityState={{ busy: connecting, disabled: connecting }}
+      accessibilityState={{ busy: connecting, disabled }}
       className="bg-card rounded-card min-h-11 flex-row items-center justify-center gap-2 py-3 active:opacity-60"
     >
       {connecting ? (
@@ -154,7 +170,7 @@ function ConnectButton({ connecting, onPress }: { connecting: boolean; onPress: 
         <SymbolView name="plus" size={15} weight="semibold" tintColor={colors.accent} />
       )}
       <Text className="text-body text-accent font-semibold">
-        {connecting ? 'Connecting…' : 'Connect Google Calendar'}
+        {connecting ? 'Connecting…' : CONNECT_LABEL[provider]}
       </Text>
     </Pressable>
   );
@@ -189,7 +205,7 @@ function AccountSection({
   const confirmDisconnect = () =>
     Alert.alert(
       `Disconnect ${account.email}?`,
-      'Its calendars and events will be removed from Planner. Nothing changes in your Google account.',
+      `Its calendars and events will be removed from Planner. Nothing changes in ${providerName(account.provider)}.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Disconnect', style: 'destructive', onPress: () => void disconnect() },
@@ -201,7 +217,7 @@ function AccountSection({
       <View className="flex-row items-end justify-between gap-2 px-1">
         <View className="shrink">
           <Text className="text-footnote text-muted uppercase">
-            {PROVIDER_LABEL[account.provider]}
+            {providerName(account.provider, account.provider)}
           </Text>
           <Text className="text-subhead text-ink font-semibold" numberOfLines={1}>
             {account.email}

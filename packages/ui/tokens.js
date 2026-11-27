@@ -54,6 +54,16 @@ const noteColors = {
   },
 };
 
+/**
+ * Task priority (1 = !, 2 = !!, 3 = !!!): the border a prioritised task gets on the day view, and
+ * the fill of the priority button at that level. The accent hue, stronger per level (in dark mode
+ * "stronger" means brighter, so level 3 still stands out most).
+ */
+const priorityColors = {
+  light: { 1: '#C9BCFD', 2: '#9A80FB', 3: '#5B3BE0' },
+  dark: { 1: '#4E4391', 2: '#7D68E6', 3: '#C7B8FF' },
+};
+
 /** iOS-style type scale (matches Apple's default Dynamic Type sizes). [fontSize, lineHeight] in px. */
 const typeScale = {
   'large-title': ['34px', '41px'],
@@ -82,4 +92,4 @@ function themeVariables(scheme) {
   );
 }
 
-module.exports = { palette, noteColors, typeScale, themeVariables };
+module.exports = { palette, noteColors, priorityColors, typeScale, themeVariables };

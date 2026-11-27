@@ -11,7 +11,7 @@ import {
 
 import { newId } from './ids';
 import { ownerId } from './owner';
-import type { Task } from './schema';
+import { MAX_PRIORITY, type Task } from './schema';
 import { habitDayTable, taskTable } from './tables';
 
 // Everything the app does to tasks. Each action changes the in-memory table (the screens update
@@ -34,6 +34,12 @@ export function taskTimes(task: Task): { start: number; end: number } | null {
   // An end at the next midnight reads as 1440, not 0.
   const nextDay = dateKey(new Date(task.end_at)) !== dateKey(new Date(task.start_at));
   return { start, end: nextDay ? MINUTES_PER_DAY : minutesOfDay(task.end_at) };
+}
+
+/** The task's priority, 0 (none) to MAX_PRIORITY. Rows synced before the column existed have none. */
+export function priorityOf(task: Pick<Task, 'priority'>): number {
+  const p = Number(task.priority ?? 0);
+  return Number.isInteger(p) && p > 0 && p <= MAX_PRIORITY ? p : 0;
 }
 
 /** A list's entries, in order. */
@@ -80,6 +86,7 @@ function blankTask(fields: Partial<Task>): Task {
     rrule: null,
     status: 'open',
     completed_at: null,
+    priority: 0,
     list_id: null,
     color: null,
     icon: null,
@@ -128,6 +135,13 @@ export function deleteIfUntitled(id: string) {
 /** Change some fields of a task. */
 export function updateTask(id: string, patch: Partial<Task>) {
   taskTable.update(id, { ...patch, updated_at: now() });
+}
+
+/** The priority button's tap: none → ! → !! → !!! → none. */
+export function cyclePriority(id: string) {
+  const task = taskTable.get(id);
+  if (!task) return;
+  updateTask(id, { priority: (priorityOf(task) + 1) % (MAX_PRIORITY + 1) });
 }
 
 /** Check a task off, or un-check it. */

@@ -1,6 +1,7 @@
 import { SCHEDULE_MAX_END, SCHEDULE_MIN_SPAN, SCHEDULE_MIN_START } from '@planner/core';
 
 import type { DayEntry } from '@/db/entries';
+import { priorityOf } from '@/db/tasks';
 
 import { placeEvent } from './event-days';
 import { dateKey, DEFAULT_DURATION_MIN, formatTime, MINUTES_PER_DAY, minutesOfDay } from './time';
@@ -13,6 +14,8 @@ export interface AnytimeTask {
   /** A list (see TimelineEntry.isList). */
   isList: boolean;
   hasNotes: boolean;
+  /** 0 = none, 1–3: drawn with that level's border. */
+  priority: number;
 }
 
 /** A calendar event in a day's all-day area (read-only: no check, can't be dragged). */
@@ -87,6 +90,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
     if (item.type === 'habit') continue;
     const isList = item.type === 'list';
     const hasNotes = !!item.notes?.trim();
+    const priority = priorityOf(item);
     if (!startAt) {
       if (isList && !item.all_day_date) continue;
       push(anytimeByDay, item.all_day_date ?? todayKey, {
@@ -95,6 +99,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
         done: status === 'done',
         isList,
         hasNotes,
+        priority,
       });
       continue;
     }
@@ -112,6 +117,7 @@ export function bucketEntries(entries: DayEntry[], todayKey: string) {
       done: status === 'done',
       isList,
       hasNotes,
+      priority,
     });
   }
   return { timedByDay, anytimeByDay, allDayEventsByDay };

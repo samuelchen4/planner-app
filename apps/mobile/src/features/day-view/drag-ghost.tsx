@@ -11,6 +11,7 @@ export interface GhostTask {
   done: boolean;
   isList: boolean;
   hasNotes: boolean;
+  priority: number;
   look: 'row' | 'block';
   width: number;
   height: number;
@@ -37,6 +38,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
           done={task.done}
           isList={task.isList}
           hasNotes={task.hasNotes}
+          priority={task.priority}
         />
       ) : (
         <BlockBody
@@ -48,6 +50,7 @@ export function DragGhost({ layer, task }: { layer: DragLayer; task: GhostTask |
           done={task.done}
           isList={task.isList}
           hasNotes={task.hasNotes}
+          priority={task.priority}
         />
       )}
     </Animated.View>
