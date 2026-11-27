@@ -8,6 +8,9 @@ import { config } from '@/lib/config';
 
 export const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
   auth: {
+    // Browser sign-ins (Google) come back with a one-time code the app exchanges for a session; the
+    // code is only good with the verifier this client stored when it started (PKCE).
+    flowType: 'pkce',
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
